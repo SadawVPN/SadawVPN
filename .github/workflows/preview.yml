@@ -28,7 +28,7 @@ jobs:
           export ANDROID_HOME=$SDK_ROOT
           export ANDROID_SDK_ROOT=$SDK_ROOT
           
-          # Ищем sdkmanager автоматически
+          # Ищем sdkmanager, где бы он ни лежал
           SDKMANAGER=$(find $SDK_ROOT -name sdkmanager | head -n 1)
           export PATH=$PATH:$(dirname $SDKMANAGER):$SDK_ROOT/platform-tools
           
@@ -36,27 +36,17 @@ jobs:
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> $GITHUB_ENV
           echo "$(dirname $SDKMANAGER)" >> $GITHUB_PATH
           
-          # Принимаем лицензии и ставим NDK
           yes | $SDKMANAGER --licenses || true
           $SDKMANAGER --install "ndk;26.1.10909125" || true
           
           echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
 
-      - name: Build Libcore (VPN Engine)
-        run: |
-          export PATH=$PATH:$(go env GOPATH)/bin:$(go env GOROOT)/bin
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-          
-          chmod +x ./run
-          ./run init action gomobile
-          ./run libcore
-
-      - name: Optimize Gradle Memory
+      - name: Fix Gradle Memory
         run: |
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8" > gradle.properties
           echo "android.useAndroidX=true" >> gradle.properties
 
-      - name: Build APK
+      - name: Build APK (Gradle auto-builds libcore)
         run: |
           chmod +x gradlew
           ./gradlew :app:assemblePreviewRelease --no-daemon

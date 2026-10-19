@@ -41,19 +41,29 @@ jobs:
           echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
           echo "$(dirname $SDKMANAGER)" >> $GITHUB_PATH
 
-      - name: Ensure Go PATH is visible
+      - name: Install Gomobile Fork manually
         run: |
-          echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
+          export PATH=$PATH:$(go env GOPATH)/bin
+          
+          # Клонируем форк напрямую, чтобы обойти проверку go.mod
+          git clone https://github.com/MatsuriDayo/gomobile.git gomobile-fork
+          cd gomobile-fork
+          
+          # Собираем из локальных файлов
+          go install ./cmd/gomobile
+          go install ./cmd/gobind
+          
+          cd ..
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Init Gomobile
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gomobile init
 
       - name: Build Libcore (VPN Engine)
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
-          
-          go install github.com/MatsuriDayo/gomobile/cmd/gomobile@latest
-          go install github.com/MatsuriDayo/gomobile/cmd/gobind@latest
-          gomobile init
-          
           mkdir -p app/libs
           cd libcore
           

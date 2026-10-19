@@ -19,30 +19,31 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Setup Environment
+      - name: Setup Android SDK Env
         run: |
-          echo "GOROOT=$(go env GOROOT)" >> $GITHUB_ENV
-          echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
           echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/26.1.10909125" >> $GITHUB_ENV
-          echo "/usr/local/lib/android/sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
       - name: Install NDK
         run: |
           echo "y" | sdkmanager --install "ndk;26.1.10909125"
 
-      - name: Init Gomobile
+      - name: Install Gomobile
         run: |
-          chmod +x ./run
-          ./run init action gomobile
+          go install github.com/sagernet/gomobile/cmd/gomobile@latest
+          go install github.com/sagernet/gomobile/cmd/gobind@latest
+          gomobile init
 
-      - name: Build Libcore
-        run: ./run libcore
+      - name: Build Libcore (arm64 only)
+        run: |
+          cd libcore
+          gomobile bind -v -androidapi 21 -target android/arm64 -o ../app/libs/libcore.aar
 
       - name: Build APK
-        run: ./gradlew :app:assemblePreviewRelease
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assemblePreviewRelease
 
       - name: Rename to SadawVPN.apk
         run: |

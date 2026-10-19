@@ -20,7 +20,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
 
       - name: Setup Android SDK & NDK
         run: |
@@ -44,15 +44,10 @@ jobs:
       - name: Install Gomobile Fork manually
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
-          
-          # Клонируем форк напрямую, чтобы обойти проверку go.mod
           git clone https://github.com/MatsuriDayo/gomobile.git gomobile-fork
           cd gomobile-fork
-          
-          # Собираем из локальных файлов
           go install ./cmd/gomobile
           go install ./cmd/gobind
-          
           cd ..
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
@@ -60,6 +55,11 @@ jobs:
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
           gomobile init
+
+      - name: Clone libneko (чтобы не было ошибки пути ../../libneko)
+        run: |
+          # Клонируем libneko НА УРОВЕНЬ ВЫШЕ проекта, как ожидает go.mod
+          git clone https://github.com/MatsuriDayo/libneko.git /home/runner/work/SadawVPN/libneko
 
       - name: Build Libcore (VPN Engine)
         run: |
@@ -69,8 +69,9 @@ jobs:
           
           go mod download
           
+          # Добавлены теги with_dhcp и with_dns для стабильной работы VPN
           gomobile bind -v -androidapi 21 -target android/arm64 \
-            -tags "with_quic,with_wireguard,with_utls,with_clash_api,with_gvisor,with_naive_outbound,with_naive_inbound" \
+            -tags "with_quic,with_wireguard,with_utls,with_clash_api,with_gvisor,with_naive_outbound,with_naive_inbound,with_dhcp,with_dns" \
             -o ../app/libs/libcore.aar
 
       - name: Optimize Gradle Memory

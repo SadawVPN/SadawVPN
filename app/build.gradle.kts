@@ -10,6 +10,7 @@ plugins {
 setupApp()
 
 android {
+    ndkVersion = "26.1.10909125"
 
     signingConfigs {
         create("sadaw") {

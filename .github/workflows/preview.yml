@@ -26,6 +26,8 @@ jobs:
           SDK_ROOT=/usr/local/lib/android/sdk
           export ANDROID_HOME=$SDK_ROOT
           export ANDROID_SDK_ROOT=$SDK_ROOT
+          export ANDROID_NDK_ROOT=$SDK_ROOT/ndk/26.1.10909125
+          
           SDKMANAGER=$(find $SDK_ROOT -name sdkmanager | head -n 1)
           export PATH=$PATH:$(dirname $SDKMANAGER):$SDK_ROOT/platform-tools
           
@@ -38,38 +40,39 @@ jobs:
           echo "ANDROID_HOME=$SDK_ROOT" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
           echo "$(dirname $SDKMANAGER)" >> $GITHUB_PATH
 
-      - name: Install Official Gomobile
+      - name: Build Custom Gomobile
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          go install golang.org/x/mobile/cmd/gobind@latest
+          export PATH=$PATH:$(go env GOPATH)/bin
+          git clone --depth=1 https://github.com/MatsuriDayo/gomobile.git /tmp/gomobile-fork
+          cd /tmp/gomobile-fork
+          go mod tidy || true
+          go build -o $(go env GOPATH)/bin/gomobile ./cmd/gomobile
+          go build -o $(go env GOPATH)/bin/gobind ./cmd/gobind
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
-      - name: Init Gomobile
-        run: gomobile init
-
-      - name: Clone libneko & sing-box (replace-пути из go.mod)
+      - name: Clone ALL dependencies (Correct Paths)
         run: |
-          git clone --depth=1 https://github.com/MatsuriDayo/libneko.git ../libneko
-          git clone --depth=1 https://github.com/MatsuriDayo/sing-box.git ../sing-box
+          git clone --depth=1 https://github.com/MatsuriDayo/libneko.git /home/runner/work/SadawVPN/libneko
+          git clone --depth=1 https://github.com/MatsuriDayo/sing-box.git /home/runner/work/SadawVPN/sing-box
+          git clone --depth=1 https://github.com/sagernet/cloudflare-tls.git /home/runner/work/SadawVPN/cloudflare-tls
 
       - name: Build Libcore (VPN Engine)
-        env:
-          GOWORK: off
         run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          mkdir -p app/libs
           cd libcore
           
-          # 1. Принудительно добавляем зависимость, которую требует gomobile
-          go get -d golang.org/x/mobile/cmd/gomobile
+          go mod edit -replace github.com/sagernet/sing-box=../../sing-box
+          go mod edit -replace github.com/matsuridayo/libneko=../../libneko
+          go mod edit -replace github.com/sagernet/cloudflare-tls=../../cloudflare-tls
           
-          # 2. Обновляем go.sum и go.mod
-          go mod tidy
+          go mod download
           
-          # 3. Собираем движок
-          mkdir -p ../app/libs
           gomobile bind -v -androidapi 21 -target android/arm64 \
-            -tags "with_quic,with_wireguard,with_utls,with_clash_api,with_gvisor,with_naive_outbound,with_naive_inbound,with_dhcp,with_dns" \
+            -tags "with_quic,with_wireguard,with_utls,with_clash_api,with_gvisor,with_naive_outbound,with_naive_inbound" \
             -o ../app/libs/libcore.aar
 
       - name: Optimize Gradle Memory

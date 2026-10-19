@@ -9,6 +9,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -24,34 +25,41 @@ jobs:
       - name: Setup Android SDK & NDK
         run: |
           SDK_ROOT=/usr/local/lib/android/sdk
+          export ANDROID_HOME=$SDK_ROOT
+          export ANDROID_SDK_ROOT=$SDK_ROOT
+          
+          # Ищем sdkmanager автоматически
+          SDKMANAGER=$(find $SDK_ROOT -name sdkmanager | head -n 1)
+          export PATH=$PATH:$(dirname $SDKMANAGER):$SDK_ROOT/platform-tools
+          
           echo "ANDROID_HOME=$SDK_ROOT" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> $GITHUB_ENV
-          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$SDK_ROOT/platform-tools" >> $GITHUB_PATH
-          sdkmanager --install "ndk;26.1.10909125"
+          echo "$(dirname $SDKMANAGER)" >> $GITHUB_PATH
+          
+          # Принимаем лицензии и ставим NDK
+          yes | $SDKMANAGER --licenses || true
+          $SDKMANAGER --install "ndk;26.1.10909125" || true
+          
           echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
 
-      - name: Ensure Go PATH is visible
+      - name: Build Libcore (VPN Engine)
         run: |
+          export PATH=$PATH:$(go env GOPATH)/bin:$(go env GOROOT)/bin
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-          echo "$(go env GOROOT)/bin" >> $GITHUB_PATH
+          
+          chmod +x ./run
+          ./run init action gomobile
+          ./run libcore
 
-      - name: Init custom gomobile-matsuri
+      - name: Optimize Gradle Memory
         run: |
-          cd libcore
-          chmod +x init.sh
-          bash init.sh
-
-      - name: Build libcore.aar
-        run: |
-          cd libcore
-          chmod +x build.sh
-          bash build.sh
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8" > gradle.properties
+          echo "android.useAndroidX=true" >> gradle.properties
 
       - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew :app:assemblePreviewRelease
+          ./gradlew :app:assemblePreviewRelease --no-daemon
 
       - name: Rename to SadawVPN.apk
         run: |

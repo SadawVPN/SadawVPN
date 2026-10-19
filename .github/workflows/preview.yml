@@ -57,9 +57,9 @@ jobs:
 
       - name: Clone libneko & sing-box (replace-пути из go.mod)
         run: |
-          # Клонируем ОБА репозитория на уровень выше, как требует go.mod
+          # Убрали -b main, чтобы скачалась ветка по умолчанию
           git clone --depth=1 https://github.com/MatsuriDayo/libneko.git ../libneko
-          git clone --depth=1 -b main https://github.com/MatsuriDayo/sing-box.git ../sing-box
+          git clone --depth=1 https://github.com/MatsuriDayo/sing-box.git ../sing-box
 
       - name: Build Libcore (VPN Engine)
         run: |
@@ -69,7 +69,6 @@ jobs:
           
           go mod download
           
-          # Добавлены теги with_dhcp и with_dns
           gomobile bind -v -androidapi 21 -target android/arm64 \
             -tags "with_quic,with_wireguard,with_utls,with_clash_api,with_gvisor,with_naive_outbound,with_naive_inbound,with_dhcp,with_dns" \
             -o ../app/libs/libcore.aar

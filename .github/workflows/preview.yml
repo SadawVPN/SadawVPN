@@ -40,38 +40,30 @@ jobs:
           echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
           echo "$(dirname $SDKMANAGER)" >> $GITHUB_PATH
 
-      - name: Install Gomobile Fork manually
+      - name: Install Official Gomobile
         run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
-          git clone https://github.com/MatsuriDayo/gomobile.git gomobile-fork
-          cd gomobile-fork
-          go install ./cmd/gomobile
-          go install ./cmd/gobind
-          cd ..
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Init Gomobile
-        run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
-          gomobile init
+        run: gomobile init
 
       - name: Clone libneko & sing-box (replace-пути из go.mod)
         run: |
-          # Убрали -b main, чтобы скачалась ветка по умолчанию
           git clone --depth=1 https://github.com/MatsuriDayo/libneko.git ../libneko
           git clone --depth=1 https://github.com/MatsuriDayo/sing-box.git ../sing-box
 
       - name: Build Libcore (VPN Engine)
+        env:
+          GOWORK: off
         run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
           mkdir -p app/libs
-          cd libcore
           
-          go mod download
-          
+          # Запускаем из корня проекта и указываем ./libcore
           gomobile bind -v -androidapi 21 -target android/arm64 \
             -tags "with_quic,with_wireguard,with_utls,with_clash_api,with_gvisor,with_naive_outbound,with_naive_inbound,with_dhcp,with_dns" \
-            -o ../app/libs/libcore.aar
+            -o app/libs/libcore.aar ./libcore
 
       - name: Optimize Gradle Memory
         run: |

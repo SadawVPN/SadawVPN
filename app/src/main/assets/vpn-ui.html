@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sadaw VPN</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+<script>
+(function(){
+  var t=null; try{t=localStorage.getItem("theme")}catch(e){}
+  if(t!=="light"&&t!=="dark")t="dark";
+  document.documentElement.setAttribute("data-theme",t);
+})();
+</script>
+<style>
+:root{--bg:#EEF1FA;--card:#FFFFFF;--text:#101426;--muted:#5C6486;--line:#D3D9EE;--on:#0E9F7B;--glow:rgba(14,159,123,.22);--btn:#101426;--btntext:#FFFFFF;--danger:#C73A4B;--scrim:rgba(16,20,38,.45);color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0F1326;--card:#192040;--text:#EAEEFF;--muted:#9AA3C7;--line:#2B3461;--on:#3DDBB0;--glow:rgba(61,219,176,.25);--btn:#EAEEFF;--btntext:#0F1326;--danger:#FF7A8A;--scrim:rgba(0,0,0,.6);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0F1326;--card:#192040;--text:#EAEEFF;--muted:#9AA3C7;--line:#2B3461;--on:#3DDBB0;--glow:rgba(61,219,176,.25);--btn:#EAEEFF;--btntext:#0F1326;--danger:#FF7A8A;--scrim:rgba(0,0,0,.6);color-scheme:dark}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+button{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"Sora",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.app{max-width:440px;height:100%;margin:0 auto;padding:20px 20px 16px;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:18px;letter-spacing:.2px}
+.theme{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:inherit;font-size:19px;line-height:1;cursor:pointer}
+.theme:focus-visible{outline:3px solid var(--on);outline-offset:2px}
+.hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;min-height:0}
+.ring{width:210px;height:210px;padding:0;border-radius:50%;border:3px solid var(--line);background:var(--card);color:inherit;font:inherit;display:grid;place-items:center;cursor:pointer;transition:border-color .4s,box-shadow .4s}
+.ring:disabled{cursor:wait}
+.ring:focus-visible{outline:3px solid var(--on);outline-offset:6px}
+.ring svg{width:72px;height:72px;stroke:var(--muted);fill:none;stroke-width:2.2;stroke-linecap:round;transition:stroke .4s}
+.app[data-s="connecting"] .ring{border-color:var(--on);border-style:dashed;animation:spin 2s linear infinite}
+.app[data-s="connecting"] .ring svg{animation:spin 2s linear infinite reverse}
+.app[data-s="on"] .ring{border-color:var(--on);box-shadow:0 0 0 14px var(--glow)}
+.app[data-s="on"] .ring svg{stroke:var(--on)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.app[data-s="connecting"] .ring,.app[data-s="connecting"] .ring svg{animation:none}}
+.status{text-align:center}
+.status h1{margin:0;font-size:26px;font-weight:700}
+.status p{margin:6px 0 0;color:var(--muted);font-size:15px;font-variant-numeric:tabular-nums}
+.app[data-s="on"] .status h1{color:var(--on)}
+.app[data-s="fail"] .status h1{color:var(--danger)}
+.app[data-s="fail"] .status p{color:var(--danger)}
+.loc{width:100%;display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:16px;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.loc:focus-visible,.item:focus-visible{outline:3px solid var(--on);outline-offset:2px}
+.flag{font-size:28px;line-height:1}
+.loc .name{flex:1}
+.loc .name b{display:block;font-size:16px}
+.loc .name span{font-size:13px;color:var(--muted)}
+.chev{width:20px;height:20px;stroke:var(--muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sheet{position:fixed;inset:0;display:none;align-items:flex-end;background:var(--scrim);z-index:20}
+.sheet.open{display:flex}
+.panel{width:100%;max-width:440px;margin:0 auto;max-height:78%;overflow-y:auto;background:var(--bg);border-radius:24px 24px 0 0;padding:18px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.panel h2{margin:0 4px 12px;font-size:18px}
+.item{width:100%;display:flex;align-items:center;gap:14px;padding:12px;border:0;border-radius:14px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.item[aria-checked="true"]{background:var(--card);box-shadow:inset 0 0 0 2px var(--on)}
+.item .name{flex:1;font-weight:600}
+.ping{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ping i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--on)}
+.ping i.mid{background:#E0A030}
+.ping i.bad{background:var(--danger)}
+</style>
+</head>
+<body>
+<div class="app" id="app" data-s="off">
+  <div class="top"><span>Sadaw VPN</span><button class="theme" id="themeBtn" aria-label="Сменить тему"></button></div>
+  <div class="hero">
+    <button class="ring" id="go" aria-label="Включить">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
+    </button>
+    <div class="status">
+      <h1 id="title" aria-live="polite">Не подключено</h1>
+      <p id="sub" role="timer" aria-live="off">Нажмите на круг, чтобы включить</p>
+    </div>
+  </div>
+  <button class="loc" id="locBtn" aria-haspopup="dialog">
+    <span class="flag" id="locFlag"></span>
+    <span class="name"><b id="locName"></b><span id="locPing"></span></span>
+    <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
+</div>
+<div class="sheet" id="sheet">
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <h2 id="sheetTitle">Выберите локацию</h2>
+    <div id="list" role="radiogroup" aria-labelledby="sheetTitle"></div>
+  </div>
+</div>
+<script>
+var LOCS=[{f:"🇩🇪",n:"Германия",ping:null}];
+var cur=0,state="off",timer=null,secs=0,failReason="";
+var app=document.getElementById("app"),title=document.getElementById("title"),sub=document.getElementById("sub"),
+    go=document.getElementById("go"),sheet=document.getElementById("sheet"),list=document.getElementById("list"),sheetReturnFocus=null;
+function pad(n){return String(n).padStart(2,"0")}
+function fmt(s){return pad(Math.floor(s/3600))+":"+pad(Math.floor(s/60)%60)+":"+pad(s%60)}
+function pingHtml(i){var p=LOCS[i].ping;if(p==null)return "— мс";return '<i class="'+(p>250?"bad":p>100?"mid":"")+'"></i>'+p+" мс";}
+function renderLoc(){var l=LOCS[cur];document.getElementById("locFlag").textContent=l.f;document.getElementById("locName").textContent=l.n;document.getElementById("locPing").innerHTML=pingHtml(cur);}
+function refreshPings(){renderLoc();if(sheet.classList.contains("open")){var items=list.querySelectorAll(".item");for(var i=0;i<items.length;i++){var pEl=items[i].querySelector(".ping");if(pEl)pEl.innerHTML=pingHtml(i);}}}
+function renderList(){list.innerHTML="";LOCS.forEach(function(l,i){var b=document.createElement("button");b.type="button";b.className="item";b.setAttribute("role","radio");b.setAttribute("aria-checked",i===cur?"true":"false");b.tabIndex=(i===cur)?0:-1;b.innerHTML='<span class="flag">'+l.f+'</span><span class="name">'+l.n+'</span><span class="ping">'+pingHtml(i)+'</span>';b.addEventListener("click",function(){selectLocation(i)});b.addEventListener("keydown",onItemKey);list.appendChild(b);});}
+function onItemKey(e){var items=Array.prototype.slice.call(list.querySelectorAll(".item"));var i=items.indexOf(document.activeElement);if(i<0)return;var ni=-1;if(e.key==="ArrowDown"||e.key==="ArrowRight")ni=(i+1)%items.length;else if(e.key==="ArrowUp"||e.key==="ArrowLeft")ni=(i-1+items.length)%items.length;else if(e.key==="Home")ni=0;else if(e.key==="End")ni=items.length-1;if(ni>=0){e.preventDefault();items.forEach(function(b,j){b.tabIndex=(j===ni)?0:-1});items[ni].focus();}}
+function openSheet(){renderList();sheetReturnFocus=document.activeElement;sheet.classList.add("open");var sel=list.querySelector('[aria-checked="true"]')||list.querySelector(".item");if(sel&&sel.focus)sel.focus();}
+function closeSheet(){if(!sheet.classList.contains("open"))return;sheet.classList.remove("open");var back=sheetReturnFocus;sheetReturnFocus=null;if(back&&back.focus){try{back.focus()}catch(e){}}}
+function selectLocation(i){var changed=(i!==cur);cur=i;renderLoc();closeSheet();if(changed&&(state==="on"||state==="connecting")){start()}}
+function setState(s,reason){state=s;app.setAttribute("data-s",s);failReason=reason||"";go.disabled=(s==="connecting");if(s==="fail"){title.textContent="Не удалось подключиться";sub.textContent=failReason||"Нажмите на круг, чтобы повторить";go.setAttribute("aria-label","Повторить");}if(s==="off"){title.textContent="Не подключено";sub.textContent="Нажмите на круг, чтобы включить";go.setAttribute("aria-label","Включить");}if(s==="connecting"){title.textContent="Подключение…";sub.textContent=LOCS[cur].n;go.setAttribute("aria-label","Подключение");}if(s==="on"){title.textContent="Подключено";go.setAttribute("aria-label","Выключить");tick()}}
+function tick(){clearInterval(timer);secs=0;sub.textContent=fmt(secs);timer=setInterval(function(){secs++;sub.textContent=fmt(secs)},1000);}
+var API_URL="https://sadaw-vpn-config.senakrivousov.workers.dev/config"; 
+var APP_KEY="6jVEwQcueA7z0mkvUTLq1DbCy3JlpJZAWx6INaN5owS57j5W";
+var vless="",gen=0;
+function fetchConfig(){var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},8000);return fetch(API_URL,{headers:{"X-App-Key":APP_KEY},cache:"no-store",signal:ctl.signal}).then(function(r){if(!r.ok)throw new Error("http "+r.status);return r.json()}).then(function(d){if(!d||typeof d.vless!=="string"||d.vless.indexOf("vless://")!==0)throw new Error("empty");return d;}).finally(function(){clearTimeout(t)});}
+function timedConfig(){var t=performance.now(),idx=cur;return fetchConfig().then(function(d){LOCS[idx].ping=Math.round(performance.now()-t);refreshPings();return d},function(e){LOCS[idx].ping=null;refreshPings();throw e});}
+function loadConfig(){var my=++gen;timedConfig().then(function(d){if(my!==gen)return;vless=d.vless;}).catch(function(e){if(my!==gen)return;if(state==="off") setState("fail","Нет связи с сервером");});}
+function start(){
+  var my=++gen,loc=LOCS[cur];clearInterval(timer);setState("connecting");
+  timedConfig().then(function(d){vless=d.vless}).catch(function(){}).then(function(){
+    if(my!==gen)return;if(!vless){setState("fail","Нет сохранённого конфига");return}
+    if (window.AndroidBridge && typeof window.AndroidBridge.connect === 'function') {
+      var result = window.AndroidBridge.connect(vless);
+      if (result === "ok") { setState("on"); } 
+      else if (result === "pending") {
+        window.onVpnResult = function(ok){ if (my !== gen) return; if (ok) setState("on"); else setState("fail", "VPN не запущен. Проверьте разрешения"); };
+      } else { setState("fail", "Не удалось запустить VPN"); }
+    } else { setState("on"); }
+  });
+}
+function stop(){gen++;clearInterval(timer);if (window.AndroidBridge && typeof window.AndroidBridge.disconnect === 'function') {try { window.AndroidBridge.disconnect(); } catch (e) { console.error(e); }}setState("off");}
+window.onVpnStopped = function() {};
+go.onclick=function(){if(state==="on") stop();else start();};
+document.getElementById("locBtn").onclick=openSheet;sheet.onclick=function(e){if(e.target===sheet)closeSheet()};
+document.addEventListener("keydown",function(e){if(!sheet.classList.contains("open"))return;if(e.key==="Escape"){closeSheet();return}if(e.key!=="Tab")return;var f=Array.prototype.slice.call(sheet.querySelectorAll('button:not([disabled]):not([tabindex="-1"])'));if(!f.length)return;var first=f[0],last=f[f.length-1],a=document.activeElement;if(e.shiftKey&&a===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&a===last){e.preventDefault();first.focus()}});
+var root=document.documentElement,themeBtn=document.getElementById("themeBtn");function setTheme(t){root.setAttribute("data-theme",t);themeBtn.textContent=(t==="dark")?"☀️":"🌙";try{localStorage.setItem("theme",t)}catch(e){}}themeBtn.textContent=(root.getAttribute("data-theme")==="dark")?"☀️":"🌙";themeBtn.onclick=function(){setTheme(root.getAttribute("data-theme")==="dark"?"light":"dark")};
+renderLoc();loadConfig();
+</script>
+</body>
+</html>

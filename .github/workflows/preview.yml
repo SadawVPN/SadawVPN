@@ -58,12 +58,19 @@ jobs:
         env:
           GOWORK: off
         run: |
-          mkdir -p app/libs
+          cd libcore
           
-          # Запускаем из корня проекта и указываем ./libcore
+          # 1. Принудительно добавляем зависимость, которую требует gomobile
+          go get -d golang.org/x/mobile/cmd/gomobile
+          
+          # 2. Обновляем go.sum и go.mod
+          go mod tidy
+          
+          # 3. Собираем движок
+          mkdir -p ../app/libs
           gomobile bind -v -androidapi 21 -target android/arm64 \
             -tags "with_quic,with_wireguard,with_utls,with_clash_api,with_gvisor,with_naive_outbound,with_naive_inbound,with_dhcp,with_dns" \
-            -o app/libs/libcore.aar ./libcore
+            -o ../app/libs/libcore.aar
 
       - name: Optimize Gradle Memory
         run: |

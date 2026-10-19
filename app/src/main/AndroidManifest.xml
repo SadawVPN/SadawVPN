@@ -346,6 +346,7 @@
         <activity
             android:name=".ui.SadawActivity"
             android:label="Sadaw VPN"
+            android:label="Sadaw VPN"
             android:exported="true"
             android:theme="@android:style/Theme.Material.Light.NoActionBar">
             <intent-filter>

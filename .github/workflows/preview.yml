@@ -7,18 +7,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-      - uses: android-actions/setup-android@v3
+
+      # Вместо проблемного плагина просто настраиваем переменные окружения
+      # (SDK уже предустановлен на серверах GitHub)
+      - name: Setup Android SDK Env
+        run: |
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          echo "/usr/local/lib/android/sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+
+      - name: Accept Android Licenses
+        run: |
+          yes | sdkmanager --licenses || true
 
       - name: Build APK
         run: ./gradlew :app:assemblePreviewRelease
 
       - name: Rename to SadawVPN.apk
         run: |
-          # Ищем единственный собранный APK и переименовываем его
           find app/build/outputs/apk/previewRelease -name "*.apk" -exec mv {} SadawVPN.apk \;
 
       - name: Upload SadawVPN

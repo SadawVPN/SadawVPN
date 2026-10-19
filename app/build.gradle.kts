@@ -10,6 +10,11 @@ plugins {
 setupApp()
 
 android {
+    splits {
+        abi {
+            isEnable = false
+        }
+    }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
     }

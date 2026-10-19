@@ -27,33 +27,56 @@ jobs:
           SDK_ROOT=/usr/local/lib/android/sdk
           export ANDROID_HOME=$SDK_ROOT
           export ANDROID_SDK_ROOT=$SDK_ROOT
-          
-          # Ищем sdkmanager, где бы он ни лежал
           SDKMANAGER=$(find $SDK_ROOT -name sdkmanager | head -n 1)
           export PATH=$PATH:$(dirname $SDKMANAGER):$SDK_ROOT/platform-tools
           
+          yes | $SDKMANAGER --licenses || true
+          $SDKMANAGER --install "ndk;26.1.10909125" "platforms;android-34" "build-tools;34.0.0" || true
+          
+          echo "sdk.dir=$SDK_ROOT" > local.properties
+          echo "ndk.dir=$SDK_ROOT/ndk/26.1.10909125" >> local.properties
+
           echo "ANDROID_HOME=$SDK_ROOT" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> $GITHUB_ENV
-          echo "$(dirname $SDKMANAGER)" >> $GITHUB_PATH
-          
-          yes | $SDKMANAGER --licenses || true
-          $SDKMANAGER --install "ndk;26.1.10909125" || true
-          
           echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
+          echo "$(dirname $SDKMANAGER)" >> $GITHUB_PATH
 
-      - name: Fix Gradle Memory
+      - name: Ensure Go PATH is visible
+        run: |
+          echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Build Libcore (VPN Engine)
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          
+          go install github.com/MatsuriDayo/gomobile/cmd/gomobile@latest
+          go install github.com/MatsuriDayo/gomobile/cmd/gobind@latest
+          gomobile init
+          
+          mkdir -p app/libs
+          cd libcore
+          
+          go mod download
+          
+          gomobile bind -v -androidapi 21 -target android/arm64 \
+            -tags "with_quic,with_wireguard,with_utls,with_clash_api,with_gvisor,with_naive_outbound,with_naive_inbound" \
+            -o ../app/libs/libcore.aar
+
+      - name: Optimize Gradle Memory
         run: |
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8" > gradle.properties
           echo "android.useAndroidX=true" >> gradle.properties
 
-      - name: Build APK (Gradle auto-builds libcore)
+      - name: Build APK
         run: |
           chmod +x gradlew
           ./gradlew :app:assemblePreviewRelease --no-daemon
 
-      - name: Rename to SadawVPN.apk
+      - name: Rename to SadawVPN.apk safely
         run: |
-          find app/build/outputs/apk/previewRelease -name "*.apk" -exec mv {} SadawVPN.apk \;
+          APK=$(find app/build/outputs/apk/previewRelease -name "*.apk" | head -n 1)
+          mv "$APK" SadawVPN.apk
 
       - name: Upload SadawVPN
         uses: actions/upload-artifact@v4

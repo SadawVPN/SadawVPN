@@ -10,6 +10,16 @@ plugins {
 setupApp()
 
 android {
+
+    signingConfigs {
+        create("sadaw") {
+            storeFile = rootProject.file("sadaw.keystore")
+            storePassword = "sadaw123"
+            keyAlias = "sadaw"
+            keyPassword = "sadaw123"
+        }
+    }
+
     splits {
         abi {
             isEnable = false

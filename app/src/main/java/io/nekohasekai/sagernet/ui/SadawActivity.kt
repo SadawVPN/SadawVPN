@@ -14,6 +14,7 @@ import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.ProfileManager
 import io.nekohasekai.sagernet.ktx.parseProxies
+import kotlinx.coroutines.runBlocking
 
 class SadawActivity : AppCompatActivity() {
     private lateinit var webView: WebView
@@ -45,18 +46,15 @@ class SadawActivity : AppCompatActivity() {
             
             Thread {
                 try {
-                    // 1. Парсим ссылку (parseProxies возвращает List<AbstractBean>)
-                    val beans = parseProxies(vlessUri)
+                    // Оборачиваем в runBlocking, так как это suspend-функции
+                    val beans = runBlocking { parseProxies(vlessUri) }
                     val bean = beans.firstOrNull() ?: throw Exception("Не удалось распарсить ссылку")
 
-                    // 2. Сохраняем профиль (createProfile - НЕ suspend, вызываем напрямую)
-                    val profile = ProfileManager.createProfile(0L, bean)
+                    val profile = runBlocking { ProfileManager.createProfile(0L, bean) }
                     
-                    // 3. Выбираем профиль и включаем VPN-режим
                     DataStore.selectedProxy = profile.id
                     DataStore.serviceMode = Key.MODE_VPN
 
-                    // 4. Запрашиваем разрешение и запускаем сервис
                     runOnUiThread {
                         val intent = VpnService.prepare(this@SadawActivity)
                         if (intent != null) {

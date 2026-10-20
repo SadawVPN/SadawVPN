@@ -1,97 +1,110 @@
 name: Build SadawVPN
+
 on:
   workflow_dispatch:
 
+# Новый запуск отменяет предыдущий, чтобы не копились зависшие сборки
+concurrency:
+  group: build-sadawvpn
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # ubuntu-latest с 19.10.2026 переезжает на Ubuntu 26 -> пинним 24.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
+          distribution: temurin
           java-version: '17'
-          distribution: 'temurin'
+          cache: gradle
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.23'
+          go-version: '1.25' # старый '1.23' мог быть слишком старым для ядра sing-box
+          cache: false # в корне нет go.sum -> кэш Go падал с warning
 
       - name: Setup Android SDK & NDK
         run: |
-          SDK_ROOT=/usr/local/lib/android/sdk
-          export ANDROID_HOME=$SDK_ROOT
-          export ANDROID_SDK_ROOT=$SDK_ROOT
-          export ANDROID_NDK_ROOT=$SDK_ROOT/ndk/26.1.10909125
-          
-          SDKMANAGER=$(find $SDK_ROOT -name sdkmanager | head -n 1)
-          export PATH=$PATH:$(dirname $SDKMANAGER):$SDK_ROOT/platform-tools
-          
-          yes | $SDKMANAGER --licenses || true
-          $SDKMANAGER --install "ndk;26.1.10909125" "platforms;android-34" "build-tools;34.0.0" || true
-          
+          NDK_VERSION=26.1.10909125
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT" -maxdepth 5 -name sdkmanager -type f | head -n 1)"
+          test -n "$SDKMANAGER" || { echo "::error::sdkmanager not found in $SDK_ROOT"; exit 1; }
+
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          # без "|| true": если NDK не поставился, сборка должна упасть здесь, а не позже
+          "$SDKMANAGER" --install "ndk;$NDK_VERSION" "platforms;android-34" "build-tools;34.0.0"
+          test -d "$SDK_ROOT/ndk/$NDK_VERSION"
+
+          {
+            echo "ANDROID_HOME=$SDK_ROOT"
+            echo "ANDROID_SDK_ROOT=$SDK_ROOT"
+            echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/$NDK_VERSION"
+            echo "ANDROID_NDK_ROOT=$SDK_ROOT/ndk/$NDK_VERSION"
+          } >> "$GITHUB_ENV"
+
           echo "sdk.dir=$SDK_ROOT" > local.properties
-          echo "ndk.dir=$SDK_ROOT/ndk/26.1.10909125" >> local.properties
+          echo "ndk.dir=$SDK_ROOT/ndk/$NDK_VERSION" >> local.properties
 
-          echo "ANDROID_HOME=$SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
-          echo "$(dirname $SDKMANAGER)" >> $GITHUB_PATH
+      - name: Restore libcore cache
+        id: libcore-cache
+        uses: actions/cache@v4
+        with:
+          path: app/libs/libcore.aar
+          key: libcore-${{ hashFiles('buildScript/**', 'libcore/**') }}
 
-      - name: Build Custom Gomobile
+      # Родной скрипт проекта: клонирует sing-box/libneko на НУЖНЫХ коммитах,
+      # ставит gomobile-matsuri и собирает app/libs/libcore.aar с правильными тегами.
+      # Раньше тут были клоны HEAD без фиксации версий -> несовместимые исходники.
+      - name: Build libcore (VPN engine)
+        if: steps.libcore-cache.outputs.cache-hit != 'true'
         run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
-          git clone --depth=1 https://github.com/MatsuriDayo/gomobile.git /tmp/gomobile-fork
-          cd /tmp/gomobile-fork
-          go mod tidy || true
-          go build -o $(go env GOPATH)/bin/gomobile ./cmd/gomobile
-          go build -o $(go env GOPATH)/bin/gobind ./cmd/gobind
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          chmod +x run gradlew
+          find buildScript libcore -name '*.sh' -exec chmod +x {} +
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          ./run lib core
+          ls -lh app/libs/libcore.aar
 
-      - name: Clone ALL dependencies (Correct Paths)
+      - name: Download assets
         run: |
-          git clone --depth=1 https://github.com/MatsuriDayo/libneko.git /home/runner/work/SadawVPN/libneko
-          git clone --depth=1 https://github.com/MatsuriDayo/sing-box.git /home/runner/work/SadawVPN/sing-box
-          git clone --depth=1 https://github.com/sagernet/cloudflare-tls.git /home/runner/work/SadawVPN/cloudflare-tls
+          if [ -x buildScript/init/action/gradle.sh ]; then
+            ./run init action gradle || echo "::warning::asset download failed"
+          fi
 
-      - name: Build Libcore (VPN Engine)
-        run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
-          mkdir -p app/libs
-          cd libcore
-          
-          go mod edit -replace github.com/sagernet/sing-box=../../sing-box
-          go mod edit -replace github.com/matsuridayo/libneko=../../libneko
-          go mod edit -replace github.com/sagernet/cloudflare-tls=../../cloudflare-tls
-          
-          go mod download
-          
-          gomobile bind -v -androidapi 21 -target android/arm64 \
-            -tags "with_quic,with_wireguard,with_utls,with_clash_api,with_gvisor,with_naive_outbound,with_naive_inbound" \
-            -o ../app/libs/libcore.aar
-
-      - name: Optimize Gradle Memory
-        run: |
-          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8" > gradle.properties
-          echo "android.useAndroidX=true" >> gradle.properties
-
+      # ВАЖНО: gradle.properties больше не перезаписывается.
+      # Старый шаг стирал android.enableJetifier / nonTransitiveRClass=false
+      # (-Xmx4g уже есть в самом файле репозитория).
       - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew :app:assemblePreviewRelease --no-daemon
+          ./gradlew :app:assemblePreviewRelease --no-daemon --stacktrace
 
-      - name: Rename to SadawVPN.apk safely
+      - name: Rename to SadawVPN.apk
         run: |
-          APK=$(find app/build/outputs/apk/previewRelease -name "*.apk" | head -n 1)
-          mv "$APK" SadawVPN.apk
+          # папка вывода: apk/preview/release/, а не apk/previewRelease/ -> ищем по всему apk/
+          APK="$(find app/build/outputs/apk -name '*arm64*.apk' 2>/dev/null | head -n 1 || true)"
+          if [ -z "$APK" ]; then
+            APK="$(find app/build/outputs/apk -name '*.apk' 2>/dev/null | head -n 1 || true)"
+          fi
+          if [ -z "$APK" ]; then
+            echo "::error::APK not found"
+            find app/build/outputs -type f || true
+            exit 1
+          fi
+          echo "Using: $APK"
+          cp "$APK" SadawVPN.apk
 
       - name: Upload SadawVPN
         uses: actions/upload-artifact@v4
         with:
           name: SadawVPN
           path: SadawVPN.apk
+          if-no-files-found: error

@@ -54,34 +54,34 @@ jobs:
 
       - name: Find, Zipalign and Sign APK
         run: |
-          echo ">>> Ищем все APK в папке сборки..."
-          find app/build -name "*.apk" -type f || true
+          echo ">>> Ищем APK в папке сборки..."
+          # Ищем ЛЮБОЙ apk, который еще не подписан нами
+          APK=$(find app/build/outputs -name "*.apk" -not -name "*-aligned.apk" -not -name "*-signed.apk" | head -n 1)
           
-          # Ищем APK во ВСЕЙ папке build
-          APK=$(find app/build -name "*.apk" -not -name "*signed*" | head -n 1)
-          echo "Найден исходный APK: $APK"
-          
-          if [ -z "$APK" ]; then 
-            echo "::error::APK вообще не собрался! Проблема в Gradle."
+          if [ -z "$APK" ]; then
+            echo "::error::APK не найден вообще! Вывожу список всех файлов в app/build:"
+            find app/build -name "*.apk" -type f || true
             exit 1
           fi
           
+          echo "✅ Найден исходный APK: $APK"
+          
+          # Ищем утилиты
           ZIPALIGN=$(find $ANDROID_HOME/build-tools -name zipalign | head -n 1)
           APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | head -n 1)
           
-          echo ">>> Запуск Zipalign..."
+          echo ">>> Zipalign..."
           $ZIPALIGN -v -p 4 "$APK" app-aligned.apk
           
-          echo ">>> Запуск Apksigner..."
-          $APKSIGNER sign --ks sadaw.keystore \
-            --ks-pass pass:sadaw123 \
-            --key-pass pass:sadaw123 \
+          echo ">>> Подписываем APK локальным ключом sadaw.keystore..."
+          $APKSIGNER sign \
+            --ks sadaw.keystore \
             --ks-key-alias sadaw \
-            --v1-signing-enabled true \
-            --v2-signing-enabled true \
-            --v3-signing-enabled true \
-            --out SadawVPN.apk app-aligned.apk
-            
+            --ks-pass "pass:sadaw123" \
+            --key-pass "pass:sadaw123" \
+            --out SadawVPN.apk \
+            app-aligned.apk
+          
           echo ">>> Проверка подписи:"
           $APKSIGNER verify --verbose SadawVPN.apk
 

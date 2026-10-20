@@ -10,11 +10,6 @@ plugins {
 setupApp()
 
 android {
-    lint {
-        checkReleaseBuilds = false
-        abortOnError = false
-    }
-    ndkVersion = "26.1.10909125"
 
     signingConfigs {
         create("sadaw") {
@@ -24,6 +19,18 @@ android {
             keyPassword = "sadaw123"
         }
     }
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+    ndkVersion = "26.1.10909125"
+
+    
 
     splits {
         abi {

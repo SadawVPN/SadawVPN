@@ -40,6 +40,10 @@ jobs:
           echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
           echo "$(dirname $SDKMANAGER)" >> $GITHUB_PATH
 
+          # Отключаем проверку контрольных сумм Go (фикс ошибки sum.golang.org)
+          echo "GOSUMDB=off" >> $GITHUB_ENV
+          echo "GOFLAGS=-mod=mod" >> $GITHUB_ENV
+
       - name: Build Libcore (VPN Engine)
         run: |
           chmod +x run gradlew
@@ -54,35 +58,14 @@ jobs:
 
       - name: Find, Zipalign and Sign APK
         run: |
-          echo ">>> Ищем APK в папке сборки..."
-          # Ищем ЛЮБОЙ apk, который еще не подписан нами
           APK=$(find app/build/outputs -name "*.apk" -not -name "*-aligned.apk" -not -name "*-signed.apk" | head -n 1)
+          if [ -z "$APK" ]; then echo "::error::APK не найден"; find app/build -name "*.apk" || true; exit 1; fi
           
-          if [ -z "$APK" ]; then
-            echo "::error::APK не найден вообще! Вывожу список всех файлов в app/build:"
-            find app/build -name "*.apk" -type f || true
-            exit 1
-          fi
-          
-          echo "✅ Найден исходный APK: $APK"
-          
-          # Ищем утилиты
           ZIPALIGN=$(find $ANDROID_HOME/build-tools -name zipalign | head -n 1)
           APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | head -n 1)
           
-          echo ">>> Zipalign..."
           $ZIPALIGN -v -p 4 "$APK" app-aligned.apk
-          
-          echo ">>> Подписываем APK локальным ключом sadaw.keystore..."
-          $APKSIGNER sign \
-            --ks sadaw.keystore \
-            --ks-key-alias sadaw \
-            --ks-pass "pass:sadaw123" \
-            --key-pass "pass:sadaw123" \
-            --out SadawVPN.apk \
-            app-aligned.apk
-          
-          echo ">>> Проверка подписи:"
+          $APKSIGNER sign --ks sadaw.keystore --ks-pass pass:sadaw123 --key-pass pass:sadaw123 --ks-key-alias sadaw --out SadawVPN.apk app-aligned.apk
           $APKSIGNER verify --verbose SadawVPN.apk
 
       - name: Upload SadawVPN

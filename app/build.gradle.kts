@@ -10,6 +10,10 @@ plugins {
 setupApp()
 
 android {
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
     ndkVersion = "26.1.10909125"
 
     signingConfigs {

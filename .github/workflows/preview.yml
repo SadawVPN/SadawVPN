@@ -52,22 +52,26 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assemblePreviewRelease --no-daemon
 
-      - name: Zipalign and Sign APK
+      - name: Find, Zipalign and Sign APK
         run: |
-          # 1. Ищем собранный APK
-          APK=$(find app/build/outputs/apk -name "*.apk" -not -name "*signed*" | head -n 1)
-          echo "Найден исходный APK: $APK"
-          if [ -z "$APK" ]; then echo "::error::Исходный APK не найден"; exit 1; fi
+          echo ">>> Ищем все APK в папке сборки..."
+          find app/build -name "*.apk" -type f || true
           
-          # 2. Ищем утилиты
+          # Ищем APK во ВСЕЙ папке build
+          APK=$(find app/build -name "*.apk" -not -name "*signed*" | head -n 1)
+          echo "Найден исходный APK: $APK"
+          
+          if [ -z "$APK" ]; then 
+            echo "::error::APK вообще не собрался! Проблема в Gradle."
+            exit 1
+          fi
+          
           ZIPALIGN=$(find $ANDROID_HOME/build-tools -name zipalign | head -n 1)
           APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | head -n 1)
           
-          # 3. Выравниваем
           echo ">>> Запуск Zipalign..."
           $ZIPALIGN -v -p 4 "$APK" app-aligned.apk
           
-          # 4. Подписываем
           echo ">>> Запуск Apksigner..."
           $APKSIGNER sign --ks sadaw.keystore \
             --ks-pass pass:sadaw123 \
@@ -78,7 +82,6 @@ jobs:
             --v3-signing-enabled true \
             --out SadawVPN.apk app-aligned.apk
             
-          # 5. Проверяем сертификат
           echo ">>> Проверка подписи:"
           $APKSIGNER verify --verbose SadawVPN.apk
 

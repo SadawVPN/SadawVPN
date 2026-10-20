@@ -9,12 +9,11 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import io.nekohasekai.sagernet.Key
 import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.ProfileManager
-import io.nekohasekai.sagernet.fmt.v2ray.StandardV2RayBean
-import io.nekohasekai.sagernet.ktx.parseLink
-import io.nekohasekai.sagernet.ktx.Key
+import io.nekohasekai.sagernet.ktx.parseProxies
 
 class SadawActivity : AppCompatActivity() {
     private lateinit var webView: WebView
@@ -24,8 +23,10 @@ class SadawActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
         webView = WebView(this)
         setContentView(webView)
+
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -41,15 +42,21 @@ class SadawActivity : AppCompatActivity() {
         @JavascriptInterface
         fun connect(vlessUri: String): String {
             Log.i(TAG, "connect(): $vlessUri")
+            
             Thread {
                 try {
+                    // 1. Парсим ссылку (parseProxies возвращает List<AbstractBean>)
+                    val beans = parseProxies(vlessUri)
+                    val bean = beans.firstOrNull() ?: throw Exception("Не удалось распарсить ссылку")
+
+                    // 2. Сохраняем профиль (createProfile - НЕ suspend, вызываем напрямую)
+                    val profile = ProfileManager.createProfile(0L, bean)
+                    
+                    // 3. Выбираем профиль и включаем VPN-режим
+                    DataStore.selectedProxy = profile.id
                     DataStore.serviceMode = Key.MODE_VPN
-                    val bean = parseLink(vlessUri) ?: throw Exception("Не удалось распарсить ссылку")
-                    if (bean !is StandardV2RayBean) throw Exception("Неверный формат")
-                    
-                    val profileId = ProfileManager.createProfile(0L, bean)
-                    DataStore.selectedProfile = profileId
-                    
+
+                    // 4. Запрашиваем разрешение и запускаем сервис
                     runOnUiThread {
                         val intent = VpnService.prepare(this@SadawActivity)
                         if (intent != null) {
@@ -60,12 +67,13 @@ class SadawActivity : AppCompatActivity() {
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Ошибка: ${e.message}", e)
+                    Log.e(TAG, "Ошибка при подключении: ${e.message}", e)
                     runOnUiThread {
                         webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(false)", null)
                     }
                 }
             }.start()
+
             return "pending"
         }
 
@@ -83,7 +91,9 @@ class SadawActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQ_VPN) {
             val ok = resultCode == RESULT_OK
-            if (ok) SagerNet.startService()
+            if (ok) {
+                SagerNet.startService()
+            }
             webView.post {
                 webView.evaluateJavascript("window.onVpnResult && window.onVpnResult($ok)", null)
             }

@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
 import android.provider.Settings
-import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -20,7 +19,6 @@ import kotlinx.coroutines.runBlocking
 
 class SadawActivity : AppCompatActivity() {
     private lateinit var webView: WebView
-    private val TAG = "SadawVPN"
     private val REQ_VPN = 1001
     private var currentProfileId: Long = -1L
 
@@ -43,30 +41,19 @@ class SadawActivity : AppCompatActivity() {
     inner class Bridge {
         @JavascriptInterface
         fun checkSubscription(subKey: String): String {
-            Log.i(TAG, "checkSubscription: $subKey")
             val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             val db = FirebaseFirestore.getInstance()
             val docRef = db.collection("licenses").document(subKey)
-
             return try {
-                val task = docRef.get()
-                val document = com.google.android.gms.tasks.Tasks.await(task, 10, java.util.concurrent.TimeUnit.SECONDS)
-
+                val document = com.google.android.gms.tasks.Tasks.await(docRef.get(), 10, java.util.concurrent.TimeUnit.SECONDS)
                 if (!document.exists()) return "invalid"
-
                 val savedDeviceId = document.getString("deviceId")
                 if (savedDeviceId.isNullOrEmpty()) {
                     docRef.update("deviceId", deviceId).get()
                     "ok"
-                } else if (savedDeviceId == deviceId) {
-                    "ok"
-                } else {
-                    "busy"
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Ошибка Firebase: ${e.message}", e)
-                "error"
-            }
+                } else if (savedDeviceId == deviceId) "ok"
+                else "busy"
+            } catch (e: Exception) { "error" }
         }
 
         @JavascriptInterface
@@ -76,7 +63,7 @@ class SadawActivity : AppCompatActivity() {
                     SagerNet.stopService()
                     Thread.sleep(500)
                     val beans = runBlocking { parseProxies(vlessUri) }
-                    val bean = beans.firstOrNull() ?: throw Exception("Ошибка парсинга")
+                    val bean = beans.firstOrNull() ?: throw Exception("Ошибка")
                     if (currentProfileId != -1L) runBlocking { ProfileManager.deleteProfile(currentProfileId) }
                     val profile = runBlocking { ProfileManager.createProfile(0L, bean) }
                     currentProfileId = profile.id
@@ -85,10 +72,7 @@ class SadawActivity : AppCompatActivity() {
                     runOnUiThread {
                         val intent = VpnService.prepare(this@SadawActivity)
                         if (intent != null) startActivityForResult(intent, REQ_VPN)
-                        else {
-                            SagerNet.startService()
-                            webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(true)", null)
-                        }
+                        else { SagerNet.startService(); webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(true)", null) }
                     }
                 } catch (e: Exception) {
                     runOnUiThread { webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(false)", null) }

@@ -66,7 +66,6 @@ android {
 }
 
 dependencies {
-    implementation("com.google.firebase:firebase-firestore-ktx:25.1.1")
 
     implementation(fileTree("libs"))
 

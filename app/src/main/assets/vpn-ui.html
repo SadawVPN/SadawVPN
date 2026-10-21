@@ -46,7 +46,6 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
 .ping i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--on)}
 .ping i.mid{background:#E0A030}
 .ping i.bad{background:var(--danger)}
-/* Стили для экранов логина и EULA */
 .screen{position:fixed;inset:0;background:var(--bg);z-index:100;display:none;flex-direction:column;padding:20px;}
 .screen.active{display:flex;}
 .btn{width:100%;padding:14px;border-radius:12px;border:none;background:var(--btn);color:var(--btntext);font-size:16px;font-weight:bold;cursor:pointer;margin-top:10px;}
@@ -56,19 +55,8 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
 </head>
 <body>
 
-<!-- ЭКРАН 1: Ввод кода -->
-<div id="loginScreen" class="screen active">
-  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-    <h1 style="color:var(--text);margin-bottom:10px;">Sadaw VPN</h1>
-    <p style="color:var(--muted);margin-bottom:20px;text-align:center;">Введите код подписки для активации</p>
-    <input type="text" id="subCodeInput" class="input" placeholder="SADAW-BETA-2026">
-    <button onclick="activateCode()" id="loginBtn" class="btn" style="max-width:300px;">Активировать</button>
-    <p id="loginError" style="color:var(--danger);margin-top:15px;font-size:14px;text-align:center;"></p>
-  </div>
-</div>
-
-<!-- ЭКРАН 2: Соглашение -->
-<div id="eulaScreen" class="screen">
+<!-- ЭКРАН 1: Соглашение (EULA) - ПОЯВЛЯЕТСЯ ПЕРВЫМ -->
+<div id="eulaScreen" class="screen active">
   <h2 style="color:var(--text);margin-bottom:15px;text-align:center;">Пользовательское соглашение</h2>
   <div style="flex:1;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px;color:var(--text);font-size:12px;line-height:1.5;margin-bottom:15px;text-align:justify;">
     <p><b>1. Общие положения</b><br>1.1. Настоящее Соглашение регулирует отношения между Администрацией Sadaw VPN и Пользователем.<br>1.2. Использование приложения возможно только после полного согласия с условиями.<br>1.3. Приложение предоставляется «как есть» (as is).</p>
@@ -84,6 +72,17 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
     Я принимаю условия соглашения
   </label>
   <button onclick="acceptEula()" id="eulaBtn" class="btn" disabled>Продолжить</button>
+</div>
+
+<!-- ЭКРАН 2: Ввод ключа -->
+<div id="loginScreen" class="screen">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+    <h1 style="color:var(--text);margin-bottom:10px;">Sadaw VPN</h1>
+    <p style="color:var(--muted);margin-bottom:20px;text-align:center;">Введите код подписки для активации</p>
+    <input type="text" id="subCodeInput" class="input" placeholder="Введите код подписки">
+    <button onclick="activateCode()" id="loginBtn" class="btn" style="max-width:300px;">Активировать</button>
+    <p id="loginError" style="color:var(--danger);margin-top:15px;font-size:14px;text-align:center;height:20px;"></p>
+  </div>
 </div>
 
 <!-- ЭКРАН 3: Главный интерфейс -->
@@ -116,7 +115,7 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
 </div>
 
 <script>
-var API_URL = "https://gist.githubusercontent.com/SadawVPN/3f8dd9fde268c4061b456f1010a4c20c/raw/a79a8aaa16f01a1e0d35e3e3f88d319bb79619d2/servers-config.json";
+var API_URL = "https://gist.githubusercontent.com/SadawVPN/7fb0eae96157df1ace5a16ca4f714a4b/raw/a79a8aaa16f01a1e0d35e3e3f88d319bb79619d2/servers-config.json";
 var LOCS = [{f:"🇩🇪",n:"Германия",vless:"",ping:null}];
 var cur=0, state="off", timer=null, secs=0, vless="", gen=0;
 
@@ -125,6 +124,26 @@ var app=document.getElementById("app"), title=document.getElementById("title"), 
 
 function pad(n){return String(n).padStart(2,"0")}
 function fmt(s){return pad(Math.floor(s/3600))+":"+pad(Math.floor(s/60)%60)+":"+pad(s%60)}
+
+// --- ЛОГИКА EULA ---
+document.addEventListener('change', function(e) {
+  if (e.target && e.target.id === 'eulaCheckbox') {
+    var btn = document.getElementById('eulaBtn');
+    btn.disabled = !e.target.checked;
+  }
+});
+
+function acceptEula() {
+  localStorage.setItem("sadaw_eula_accepted", "true");
+  document.getElementById("eulaScreen").classList.remove("active");
+  
+  if (localStorage.getItem("sadaw_sub_code")) {
+    document.getElementById("app").style.display = "flex";
+    loadConfig();
+  } else {
+    document.getElementById("loginScreen").classList.add("active");
+  }
+}
 
 // --- ЛОГИКА АВТОРИЗАЦИИ ---
 function activateCode() {
@@ -138,56 +157,40 @@ function activateCode() {
     btn.textContent = "Проверка..."; btn.disabled = true; errorLabel.textContent = "";
     setTimeout(function() {
       var result = window.AndroidBridge.checkSubscription(code);
+      
       if (result === "ok") {
         localStorage.setItem("sadaw_sub_code", code);
-        showEulaIfNeeded();
+        document.getElementById("loginScreen").classList.remove("active");
+        document.getElementById("app").style.display = "flex";
+        loadConfig();
       } else if (result === "busy") {
         errorLabel.textContent = "Этот ключ уже занят другим устройством!";
         btn.textContent = "Активировать"; btn.disabled = false;
       } else if (result === "invalid") {
-        errorLabel.textContent = "Неверный код.";
+        errorLabel.textContent = "Неверный код. Такого ключа не существует.";
         btn.textContent = "Активировать"; btn.disabled = false;
       } else {
-        errorLabel.textContent = "Ошибка сети.";
+        errorLabel.textContent = "Ошибка сети. Проверьте интернет.";
         btn.textContent = "Активировать"; btn.disabled = false;
       }
     }, 100);
-  } else {
-    // Для теста в браузере
-    localStorage.setItem("sadaw_sub_code", code);
-    showEulaIfNeeded();
-  }
-}
-
-// --- ЛОГИКА EULA ---
-document.addEventListener('change', function(e) {
-  if (e.target && e.target.id === 'eulaCheckbox') {
-    var btn = document.getElementById('eulaBtn');
-    btn.disabled = !e.target.checked;
-  }
-});
-
-function acceptEula() {
-  localStorage.setItem("sadaw_eula_accepted", "true");
-  document.getElementById("eulaScreen").classList.remove("active");
-  document.getElementById("app").style.display = "flex";
-  loadConfig();
-}
-
-function showEulaIfNeeded() {
-  document.getElementById("loginScreen").classList.remove("active");
-  if (localStorage.getItem("sadaw_eula_accepted") !== "true") {
-    document.getElementById("eulaScreen").classList.add("active");
-  } else {
-    document.getElementById("app").style.display = "flex";
-    loadConfig();
   }
 }
 
 // --- ПРОВЕРКА ПРИ ЗАПУСКЕ ---
 window.addEventListener('DOMContentLoaded', function() {
-  if (localStorage.getItem("sadaw_sub_code")) {
-    showEulaIfNeeded();
+  var eulaAccepted = localStorage.getItem("sadaw_eula_accepted") === "true";
+  var subCode = localStorage.getItem("sadaw_sub_code");
+
+  if (!eulaAccepted) {
+    document.getElementById("eulaScreen").classList.add("active");
+  } else if (!subCode) {
+    document.getElementById("eulaScreen").classList.remove("active");
+    document.getElementById("loginScreen").classList.add("active");
+  } else {
+    document.getElementById("eulaScreen").classList.remove("active");
+    document.getElementById("app").style.display = "flex";
+    loadConfig();
   }
 });
 

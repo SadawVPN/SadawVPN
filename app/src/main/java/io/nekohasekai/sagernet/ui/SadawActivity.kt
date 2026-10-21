@@ -25,7 +25,6 @@ class SadawActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private val TAG = "SadawVPN"
     private val REQ_VPN = 1001
-    private var currentProfileId: Long = -1L
     private val API_BASE = "https://sadaw-vpn-config.senakrivousov.workers.dev"
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -75,7 +74,7 @@ class SadawActivity : AppCompatActivity() {
                     val jsonResponse = JSONObject(response)
                     val status = jsonResponse.getString("status")
                     Log.i(TAG, "Ответ от Cloudflare: $status")
-                    status // Возвращаем "ok", "busy" или "invalid"
+                    status
                 } else {
                     "error"
                 }
@@ -108,13 +107,27 @@ class SadawActivity : AppCompatActivity() {
                 try {
                     SagerNet.stopService()
                     Thread.sleep(500)
-                    val beans = runBlocking { parseProxies(vlessUri) }
-                    val bean = beans.firstOrNull() ?: throw Exception("Ошибка парсинга")
-                    if (currentProfileId != -1L) runBlocking { ProfileManager.deleteProfile(currentProfileId) }
-                    val profile = runBlocking { ProfileManager.createProfile(0L, bean) }
-                    currentProfileId = profile.id
-                    DataStore.selectedProxy = profile.id
+                    
+                    // Загружаем сохраненный ID профиля (или создаем новый)
+                    val prefs = getSharedPreferences("sadaw_vpn", MODE_PRIVATE)
+                    var profileId = prefs.getLong("profile_id", -1L)
+                    
+                    if (profileId == -1L) {
+                        // Первый раз — создаем профиль
+                        Log.i(TAG, "Создаем новый профиль")
+                        val beans = runBlocking { parseProxies(vlessUri) }
+                        val bean = beans.firstOrNull() ?: throw Exception("Ошибка парсинга")
+                        val profile = runBlocking { ProfileManager.createProfile(0L, bean) }
+                        profileId = profile.id
+                        prefs.edit().putLong("profile_id", profileId).apply()
+                        Log.i(TAG, "Профиль создан с ID: $profileId")
+                    } else {
+                        Log.i(TAG, "Используем существующий профиль ID: $profileId")
+                    }
+                    
+                    DataStore.selectedProxy = profileId
                     DataStore.serviceMode = Key.MODE_VPN
+                    
                     runOnUiThread {
                         val intent = VpnService.prepare(this@SadawActivity)
                         if (intent != null) startActivityForResult(intent, REQ_VPN)

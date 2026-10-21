@@ -5,10 +5,12 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.FirebaseFirestore
 import io.nekohasekai.sagernet.Key
 import io.nekohasekai.sagernet.SagerNet
@@ -16,9 +18,11 @@ import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.ProfileManager
 import io.nekohasekai.sagernet.ktx.parseProxies
 import kotlinx.coroutines.runBlocking
+import java.util.concurrent.TimeUnit
 
 class SadawActivity : AppCompatActivity() {
     private lateinit var webView: WebView
+    private val TAG = "SadawVPN"
     private val REQ_VPN = 1001
     private var currentProfileId: Long = -1L
 
@@ -41,19 +45,29 @@ class SadawActivity : AppCompatActivity() {
     inner class Bridge {
         @JavascriptInterface
         fun checkSubscription(subKey: String): String {
+            Log.i(TAG, "checkSubscription: $subKey")
             val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             val db = FirebaseFirestore.getInstance()
             val docRef = db.collection("licenses").document(subKey)
+
             return try {
-                val document = com.google.android.gms.tasks.Tasks.await(docRef.get(), 10, java.util.concurrent.TimeUnit.SECONDS)
+                val document = Tasks.await(docRef.get(), 10, TimeUnit.SECONDS)
+
                 if (!document.exists()) return "invalid"
+
                 val savedDeviceId = document.getString("deviceId")
                 if (savedDeviceId.isNullOrEmpty()) {
-                    docRef.update("deviceId", deviceId).get()
+                    Tasks.await(docRef.update("deviceId", deviceId), 10, TimeUnit.SECONDS)
                     "ok"
-                } else if (savedDeviceId == deviceId) "ok"
-                else "busy"
-            } catch (e: Exception) { "error" }
+                } else if (savedDeviceId == deviceId) {
+                    "ok"
+                } else {
+                    "busy"
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка Firebase: ${e.message}", e)
+                "error"
+            }
         }
 
         @JavascriptInterface
@@ -63,8 +77,7 @@ class SadawActivity : AppCompatActivity() {
                     SagerNet.stopService()
                     Thread.sleep(500)
                     val beans = runBlocking { parseProxies(vlessUri) }
-                    val bean = beans.firstOrNull() ?: throw Exception("Ошибка")
-                    if (currentProfileId != -1L) runBlocking { ProfileManager.deleteProfile(currentProfileId) }
+                    val bean = beans.firstOrNull() ?: throw Exception("Ошибка парсинга")
                     val profile = runBlocking { ProfileManager.createProfile(0L, bean) }
                     currentProfileId = profile.id
                     DataStore.selectedProxy = profile.id
@@ -72,9 +85,13 @@ class SadawActivity : AppCompatActivity() {
                     runOnUiThread {
                         val intent = VpnService.prepare(this@SadawActivity)
                         if (intent != null) startActivityForResult(intent, REQ_VPN)
-                        else { SagerNet.startService(); webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(true)", null) }
+                        else {
+                            SagerNet.startService()
+                            webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(true)", null)
+                        }
                     }
                 } catch (e: Exception) {
+                    Log.e(TAG, "Ошибка подключения: ${e.message}", e)
                     runOnUiThread { webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(false)", null) }
                 }
             }.start()

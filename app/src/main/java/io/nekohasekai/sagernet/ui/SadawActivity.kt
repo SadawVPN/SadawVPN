@@ -43,6 +43,25 @@ class SadawActivity : AppCompatActivity() {
     }
 
     inner class Bridge {
+
+        @JavascriptInterface
+        fun ping(host: String, port: Int, index: Int) {
+            Thread {
+                var pingMs = -1
+                try {
+                    val start = System.currentTimeMillis()
+                    val socket = java.net.Socket()
+                    socket.connect(java.net.InetSocketAddress(host, port), 2000)
+                    socket.close()
+                    pingMs = (System.currentTimeMillis() - start).toInt()
+                } catch (e: Exception) {}
+                
+                webView.post {
+                    webView.evaluateJavascript("window.onPingResult && window.onPingResult($index, $pingMs)", null)
+                }
+            }.start()
+        }
+
         @JavascriptInterface
         fun checkSubscription(subKey: String): String {
             Log.i(TAG, "checkSubscription: $subKey")

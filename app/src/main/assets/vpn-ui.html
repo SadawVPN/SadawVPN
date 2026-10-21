@@ -34,18 +34,6 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
 .loc .name{flex:1}
 .loc .name b{display:block;font-size:16px}
 .loc .name span{font-size:13px;color:var(--muted)}
-.chev{width:20px;height:20px;stroke:var(--muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.sheet{position:fixed;inset:0;display:none;align-items:flex-end;background:var(--scrim);z-index:20}
-.sheet.open{display:flex}
-.panel{width:100%;max-width:440px;margin:0 auto;max-height:78%;overflow-y:auto;background:var(--bg);border-radius:24px 24px 0 0;padding:18px 16px calc(16px + env(safe-area-inset-bottom,0px))}
-.panel h2{margin:0 4px 12px;font-size:18px}
-.item{width:100%;display:flex;align-items:center;gap:14px;padding:12px;border:0;border-radius:14px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.item[aria-checked="true"]{background:var(--card);box-shadow:inset 0 0 0 2px var(--on)}
-.item .name{flex:1;font-weight:600}
-.ping{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
-.ping i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--on)}
-.ping i.mid{background:#E0A030}
-.ping i.bad{background:var(--danger)}
 .screen{position:fixed;inset:0;background:var(--bg);z-index:100;display:none;flex-direction:column;padding:20px;}
 .screen.active{display:flex;}
 .btn{width:100%;padding:14px;border-radius:12px;border:none;background:var(--btn);color:var(--btntext);font-size:16px;font-weight:bold;cursor:pointer;margin-top:10px;}
@@ -54,8 +42,6 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
 </style>
 </head>
 <body>
-
-<!-- ЭКРАН 1: Соглашение (EULA) - ПОЯВЛЯЕТСЯ ПЕРВЫМ -->
 <div id="eulaScreen" class="screen active">
   <h2 style="color:var(--text);margin-bottom:15px;text-align:center;">Пользовательское соглашение</h2>
   <div style="flex:1;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px;color:var(--text);font-size:12px;line-height:1.5;margin-bottom:15px;text-align:justify;">
@@ -74,7 +60,6 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
   <button onclick="acceptEula()" id="eulaBtn" class="btn" disabled>Продолжить</button>
 </div>
 
-<!-- ЭКРАН 2: Ввод ключа -->
 <div id="loginScreen" class="screen">
   <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
     <h1 style="color:var(--text);margin-bottom:10px;">Sadaw VPN</h1>
@@ -85,10 +70,9 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
   </div>
 </div>
 
-<!-- ЭКРАН 3: Главный интерфейс -->
 <div class="app" id="app" data-s="off" style="display:none;">
   <div class="top">
-    <span>Sadaw VPN</span>
+    <span><span id="secretAdminBtn" style="cursor:pointer;">S</span>adaw VPN</span>
     <button class="theme" id="themeBtn" aria-label="Сменить тему">☀️</button>
   </div>
   <div class="hero">
@@ -103,213 +87,108 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
   <button class="loc" id="locBtn">
     <span class="flag" id="locFlag">🇩🇪</span>
     <span class="name"><b id="locName">Германия</b><span id="locPing">— мс</span></span>
-    <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
   </button>
 </div>
 
-<div class="sheet" id="sheet">
-  <div class="panel" role="dialog">
-    <h2 id="sheetTitle">Выберите локацию</h2>
-    <div id="list" role="radiogroup"></div>
-  </div>
-</div>
-
 <script>
-var API_URL = "https://gist.githubusercontent.com/SadawVPN/7fb0eae96157df1ace5a16ca4f714a4b/raw/a79a8aaa16f01a1e0d35e3e3f88d319bb79619d2/servers-config.json";
+var API_URL = "https://sadaw-vpn-config.senakrivousov.workers.dev";
 var LOCS = [{f:"🇩🇪",n:"Германия",vless:"",ping:null}];
 var cur=0, state="off", timer=null, secs=0, vless="", gen=0;
-
-var app=document.getElementById("app"), title=document.getElementById("title"), sub=document.getElementById("sub"),
-    go=document.getElementById("go"), sheet=document.getElementById("sheet"), list=document.getElementById("list");
-
+var app=document.getElementById("app"), title=document.getElementById("title"), sub=document.getElementById("sub"), go=document.getElementById("go");
 function pad(n){return String(n).padStart(2,"0")}
 function fmt(s){return pad(Math.floor(s/3600))+":"+pad(Math.floor(s/60)%60)+":"+pad(s%60)}
-
-// --- ЛОГИКА EULA ---
 document.addEventListener('change', function(e) {
-  if (e.target && e.target.id === 'eulaCheckbox') {
-    var btn = document.getElementById('eulaBtn');
-    btn.disabled = !e.target.checked;
-  }
+  if (e.target && e.target.id === 'eulaCheckbox') { document.getElementById('eulaBtn').disabled = !e.target.checked; }
 });
-
 function acceptEula() {
   localStorage.setItem("sadaw_eula_accepted", "true");
   document.getElementById("eulaScreen").classList.remove("active");
-  
-  if (localStorage.getItem("sadaw_sub_code")) {
-    document.getElementById("app").style.display = "flex";
-    loadConfig();
-  } else {
-    document.getElementById("loginScreen").classList.add("active");
-  }
+  if (localStorage.getItem("sadaw_sub_code")) { document.getElementById("app").style.display = "flex"; loadConfig(); }
+  else { document.getElementById("loginScreen").classList.add("active"); }
 }
-
-// --- ЛОГИКА АВТОРИЗАЦИИ ---
 function activateCode() {
   var code = document.getElementById("subCodeInput").value.trim().toUpperCase();
   var errorLabel = document.getElementById("loginError");
   var btn = document.getElementById("loginBtn");
-  
   if(code.length < 5) { errorLabel.textContent = "Код слишком короткий"; return; }
-  
   if (window.AndroidBridge && typeof window.AndroidBridge.checkSubscription === 'function') {
     btn.textContent = "Проверка..."; btn.disabled = true; errorLabel.textContent = "";
     setTimeout(function() {
       var result = window.AndroidBridge.checkSubscription(code);
-      
       if (result === "ok") {
         localStorage.setItem("sadaw_sub_code", code);
+        if (!localStorage.getItem("sadaw_device_id")) { localStorage.setItem("sadaw_device_id", "dev_" + Math.random().toString(36).substring(2, 10)); }
         document.getElementById("loginScreen").classList.remove("active");
         document.getElementById("app").style.display = "flex";
         loadConfig();
-      } else if (result === "busy") {
-        errorLabel.textContent = "Этот ключ уже занят другим устройством!";
-        btn.textContent = "Активировать"; btn.disabled = false;
-      } else if (result === "invalid") {
-        errorLabel.textContent = "Неверный код. Такого ключа не существует.";
-        btn.textContent = "Активировать"; btn.disabled = false;
-      } else {
-        errorLabel.textContent = "Ошибка сети. Проверьте интернет.";
-        btn.textContent = "Активировать"; btn.disabled = false;
-      }
+      } else if (result === "busy") { errorLabel.textContent = "Этот ключ уже занят!"; btn.textContent = "Активировать"; btn.disabled = false; }
+      else if (result === "invalid") { errorLabel.textContent = "Неверный код."; btn.textContent = "Активировать"; btn.disabled = false; }
+      else { errorLabel.textContent = "Ошибка сети."; btn.textContent = "Активировать"; btn.disabled = false; }
     }, 100);
   }
 }
-
-// --- ПРОВЕРКА ПРИ ЗАПУСКЕ ---
 window.addEventListener('DOMContentLoaded', function() {
   var eulaAccepted = localStorage.getItem("sadaw_eula_accepted") === "true";
   var subCode = localStorage.getItem("sadaw_sub_code");
-
-  if (!eulaAccepted) {
-    document.getElementById("eulaScreen").classList.add("active");
-  } else if (!subCode) {
-    document.getElementById("eulaScreen").classList.remove("active");
-    document.getElementById("loginScreen").classList.add("active");
-  } else {
-    document.getElementById("eulaScreen").classList.remove("active");
-    document.getElementById("app").style.display = "flex";
-    loadConfig();
-  }
+  if (!eulaAccepted) { document.getElementById("eulaScreen").classList.add("active"); }
+  else if (!subCode) { document.getElementById("eulaScreen").classList.remove("active"); document.getElementById("loginScreen").classList.add("active"); }
+  else { document.getElementById("eulaScreen").classList.remove("active"); document.getElementById("app").style.display = "flex"; loadConfig(); }
 });
-
-// --- ЛОГИКА ЗАГРУЗКИ И ПИНГА ---
 function loadConfig(){
-  fetch(API_URL, {cache:"no-store"}).then(r=>r.json()).then(d=>{
-    if(d.servers && Array.isArray(d.servers)){
-      LOCS = d.servers.map(s => ({f:s.flag, n:s.name, vless:s.vless, ping:null}));
-      cur = 0;
-      renderLoc();
-      pingAllServers();
-    }
+  var subCode = localStorage.getItem("sadaw_sub_code");
+  var deviceId = localStorage.getItem("sadaw_device_id");
+  if (!subCode || !deviceId) { setState("fail", "Нет ключа"); return; }
+  fetch(API_URL + "/get-config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: subCode, deviceId: deviceId }) })
+  .then(r => r.json()).then(d => {
+    if (d.error) { setState("fail", d.error); return; }
+    if (d.vless) { LOCS = [{ f: "🇩🇪", n: "Германия", vless: d.vless, ping: null }]; cur = 0; renderLoc(); pingAllServers(); }
     setState("off");
-  }).catch(e => setState("fail","Нет связи с сервером"));
+  }).catch(e => setState("fail", "Нет связи с сервером"));
 }
-
 function pingAllServers(){
   if(!window.AndroidBridge || typeof window.AndroidBridge.ping !== 'function') return;
   LOCS.forEach((loc, index) => {
     if(!loc.vless) return;
     var match = loc.vless.match(/@([^:]+):(\d+)/);
-    if(match){
-      window.AndroidBridge.ping(match[1], parseInt(match[2]), index);
-    }
+    if(match) window.AndroidBridge.ping(match[1], parseInt(match[2]), index);
   });
 }
-
 window.onPingResult = function(index, pingMs) {
-  if(LOCS[index]){
-    LOCS[index].ping = pingMs > 0 ? pingMs : null;
-    if(index === cur) renderLoc();
-  }
+  if(LOCS[index]){ LOCS[index].ping = pingMs > 0 ? pingMs : null; if(index === cur) renderLoc(); }
 };
-
-// --- UI ЛОГИКА ---
-function pingHtml(i){
-  var p = LOCS[i].ping;
-  if(p == null) return "— мс";
-  return '<i class="'+(p>250?"bad":p>100?"mid":"")+'"></i>'+p+" мс";
-}
-function renderLoc(){
-  var l = LOCS[cur];
-  document.getElementById("locFlag").textContent = l.f;
-  document.getElementById("locName").textContent = l.n;
-  document.getElementById("locPing").innerHTML = pingHtml(cur);
-}
-function renderList(){
-  list.innerHTML="";
-  LOCS.forEach((l,i) => {
-    var b = document.createElement("button");
-    b.className = "item";
-    b.setAttribute("role", "radio");
-    b.setAttribute("aria-checked", i===cur);
-    b.innerHTML = '<span class="flag">'+l.f+'</span><span class="name">'+l.n+'</span><span class="ping">'+pingHtml(i)+'</span>';
-    b.onclick = () => { cur=i; renderLoc(); sheet.classList.remove("open"); };
-    list.appendChild(b);
-  });
-}
-document.getElementById("locBtn").onclick = () => { renderList(); sheet.classList.add("open"); };
-sheet.onclick = (e) => { if(e.target === sheet) sheet.classList.remove("open"); };
-
+function pingHtml(i){ var p = LOCS[i].ping; if(p == null) return "— мс"; return '<i class="'+(p>250?"bad":p>100?"mid":"")+'"></i>'+p+" мс"; }
+function renderLoc(){ var l = LOCS[cur]; document.getElementById("locFlag").textContent = l.f; document.getElementById("locName").textContent = l.n; document.getElementById("locPing").innerHTML = pingHtml(cur); }
 function setState(s, reason){
-  state=s; app.setAttribute("data-s",s);
-  go.disabled = (s==="connecting");
-  if(s==="fail"){
-    title.textContent="Не удалось подключиться";
-    sub.textContent=reason||"Нажмите на круг, чтобы повторить";
-  }
-  if(s==="off"){
-    title.textContent="Не подключено";
-    sub.textContent="Нажмите на круг, чтобы включить";
-  }
-  if(s==="connecting"){
-    title.textContent="Подключение…"; sub.textContent=LOCS[cur].n;
-  }
-  if(s==="on"){
-    title.textContent="Подключено"; tick();
-  }
+  state=s; app.setAttribute("data-s",s); go.disabled = (s==="connecting");
+  if(s==="fail"){ title.textContent="Не удалось"; sub.textContent=reason||"Повторите"; }
+  if(s==="off"){ title.textContent="Не подключено"; sub.textContent="Нажмите на круг"; }
+  if(s==="connecting"){ title.textContent="Подключение…"; sub.textContent=LOCS[cur].n; }
+  if(s==="on"){ title.textContent="Подключено"; tick(); }
 }
-function tick(){
-  clearInterval(timer); secs=0; sub.textContent=fmt(secs);
-  timer=setInterval(() => { secs++; sub.textContent=fmt(secs); }, 1000);
-}
-
+function tick(){ clearInterval(timer); secs=0; sub.textContent=fmt(secs); timer=setInterval(() => { secs++; sub.textContent=fmt(secs); }, 1000); }
 function start(){
-  var my = ++gen;
-  clearInterval(timer); setState("connecting");
-  
-  vless = LOCS[cur].vless;
+  var my = ++gen; clearInterval(timer); setState("connecting"); vless = LOCS[cur].vless;
   if(!vless) { setState("fail", "Нет конфига"); return; }
-  
   if (window.AndroidBridge && typeof window.AndroidBridge.connect === 'function') {
     window.AndroidBridge.connect(vless);
-    window.onVpnResult = function(ok) {
-      if (my !== gen) return;
-      if (ok) setState("on"); else setState("fail", "VPN не запущен");
-    };
-  } else {
-    setTimeout(() => { if(my===gen) setState("on"); }, 500);
-  }
+    window.onVpnResult = function(ok) { if (my !== gen) return; if (ok) setState("on"); else setState("fail", "VPN не запущен"); };
+  } else { setTimeout(() => { if(my===gen) setState("on"); }, 500); }
 }
-
-function stop(){
-  gen++; clearInterval(timer);
-  if (window.AndroidBridge && typeof window.AndroidBridge.disconnect === 'function') {
-    window.AndroidBridge.disconnect();
-  }
-  setState("off");
-}
-
+function stop(){ gen++; clearInterval(timer); if (window.AndroidBridge && typeof window.AndroidBridge.disconnect === 'function') window.AndroidBridge.disconnect(); setState("off"); }
 go.onclick = () => { if(state==="on") stop(); else start(); };
-
-// --- ТЕМА ---
 var root=document.documentElement, themeBtn=document.getElementById("themeBtn");
-themeBtn.onclick = () => {
-  var t = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
-  root.setAttribute("data-theme", t);
-  themeBtn.textContent = t === "dark" ? "☀️" : "🌙";
-};
+themeBtn.onclick = () => { var t = root.getAttribute("data-theme") === "dark" ? "light" : "dark"; root.setAttribute("data-theme", t); themeBtn.textContent = t === "dark" ? "☀️" : "🌙"; };
+document.getElementById("secretAdminBtn").addEventListener("click", function() {
+  var pass = prompt("Введите пароль администратора:");
+  if (pass === "ors192289") {
+    var newVless = prompt("Введите новую VLESS-ссылку (для всех устройств):");
+    if (newVless && newVless.startsWith("vless://")) {
+      fetch(API_URL + "/admin/update-vless", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "ors192289", vless: newVless }) })
+      .then(r => r.json()).then(res => { if (res.ok) { alert("✅ Ссылка обновлена! Все пользователи получат её."); localStorage.setItem("sadaw_custom_vless", newVless); } else { alert("❌ " + res.error); } })
+      .catch(e => alert("❌ Ошибка сети: " + e.message));
+    } else if (newVless !== null) { alert("❌ Ссылка должна начинаться с vless://"); }
+  } else if (pass !== null) { alert("❌ Неверный пароль"); }
+});
 </script>
 </body>
 </html>

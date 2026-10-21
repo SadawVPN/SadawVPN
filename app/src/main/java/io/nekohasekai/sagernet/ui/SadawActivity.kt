@@ -9,6 +9,7 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
 import androidx.appcompat.app.AppCompatActivity
 import io.nekohasekai.sagernet.Key
 import io.nekohasekai.sagernet.SagerNet
@@ -39,6 +40,7 @@ class SadawActivity : AppCompatActivity() {
             allowContentAccess = true
         }
         webView.webViewClient = WebViewClient()
+        webView.webChromeClient = WebChromeClient()
         webView.addJavascriptInterface(Bridge(), "AndroidBridge")
         webView.loadUrl("file:///android_asset/vpn-ui.html")
     }

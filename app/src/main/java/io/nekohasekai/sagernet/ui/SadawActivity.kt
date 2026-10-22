@@ -2,14 +2,15 @@ package io.nekohasekai.sagernet.ui
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.webkit.WebChromeClient
 import androidx.appcompat.app.AppCompatActivity
 import io.nekohasekai.sagernet.Key
 import io.nekohasekai.sagernet.SagerNet
@@ -17,16 +18,20 @@ import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.ProfileManager
 import io.nekohasekai.sagernet.ktx.parseProxies
 import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import org.json.JSONObject
 
 class SadawActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private val TAG = "SadawVPN"
     private val REQ_VPN = 1001
+    // Временный URL (позже заменим на твой VPS)
     private val API_BASE = "https://sadaw-vpn-config.senakrivousov.workers.dev"
+    private var currentProfileId: Long = -1L
+    private var forcedBypassPackages = mutableSetOf<String>()
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,11 +72,7 @@ class SadawActivity : AppCompatActivity() {
                 writer.close()
                 if (conn.responseCode == HttpURLConnection.HTTP_OK) {
                     val response = conn.inputStream.bufferedReader().use { it.readText() }
-                    val status = JSONObject(response).getString("status")
-                    if (status == "expired") {
-                        // Можно добавить локальное удаление ключа, если нужно
-                        "expired"
-                    } else status
+                    JSONObject(response).getString("status")
                 } else "error"
             } catch (e: Exception) { "error" }
         }
@@ -124,6 +125,48 @@ class SadawActivity : AppCompatActivity() {
         fun disconnect() {
             SagerNet.stopService()
             webView.post { webView.evaluateJavascript("window.onVpnStopped && window.onVpnStopped()", null) }
+        }
+
+        @JavascriptInterface
+        fun getInstalledApps(): String {
+            val pm = packageManager
+            val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+            val jsonArray = JSONArray()
+            forcedBypassPackages.clear()
+            val sortedApps = apps.sortedBy { pm.getApplicationLabel(it).toString().lowercase() }
+            
+            for (app in sortedApps) {
+                if (pm.getLaunchIntentForPackage(app.packageName) == null) continue
+                val label = pm.getApplicationLabel(app).toString()
+                // Простой поиск MAX (как ты и просил, без лишних умностей)
+                val isMax = label.contains("MAX", ignoreCase = true) || 
+                            label.contains("МАКС", ignoreCase = true) || 
+                            app.packageName.contains("max", ignoreCase = true)
+                
+                if (isMax) forcedBypassPackages.add(app.packageName)
+                
+                val appInfo = JSONObject()
+                appInfo.put("packageName", app.packageName)
+                appInfo.put("label", label)
+                appInfo.put("isMax", isMax)
+                jsonArray.put(appInfo)
+            }
+            return jsonArray.toString()
+        }
+
+        @JavascriptInterface
+        fun setSplitTunneling(enabled: Boolean, bypassMode: Boolean, packagesJson: String) {
+            val packagesArray = JSONArray(packagesJson)
+            val packageList = mutableListOf<String>()
+            for (i in 0 until packagesArray.length()) {
+                packageList.add(packagesArray.getString(i))
+            }
+            val finalList = (packageList + forcedBypassPackages).distinct()
+            val individualString = finalList.joinToString("\n")
+            
+            DataStore.proxyApps = enabled
+            DataStore.bypass = bypassMode
+            DataStore.individual = individualString
         }
     }
 

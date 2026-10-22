@@ -30,7 +30,6 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
 .screen{position:fixed;inset:0;background:var(--bg);z-index:100;display:none;flex-direction:column;padding:20px}.screen.active{display:flex}
 .btn{width:100%;padding:14px;border-radius:12px;border:none;background:var(--btn);color:var(--btntext);font-size:16px;font-weight:bold;cursor:pointer;margin-top:10px}.btn:disabled{opacity:.5}
 .input{width:100%;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);margin-bottom:15px;text-align:center;font-size:16px}
-/* Админка */
 .admin-tabs{display:flex;gap:8px;margin-bottom:16px}.admin-tab{flex:1;padding:10px;text-align:center;border-radius:10px;background:var(--card);border:1px solid var(--line);cursor:pointer;font-size:13px;font-weight:600}
 .admin-tab.active{background:var(--btn);color:var(--btntext);border-color:var(--btn)}
 .tab-content{display:none}.tab-content.active{display:block}
@@ -69,7 +68,7 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
   </div>
 </div>
 
-<!-- MAIN APP -->
+<!-- APP -->
 <div class="app" id="app" data-s="off" style="display:none;">
   <div class="top">
     <span><span id="secretAdminBtn" style="cursor:pointer;-webkit-user-select:none;">S</span>adaw VPN</span>
@@ -83,42 +82,77 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
     <span class="flag" id="locFlag">🇩🇪</span>
     <span class="name"><b id="locName">Германия</b><span id="locPing">— мс</span></span>
   </button>
+  <button id="tunnelBtn" style="width:100%;margin-top:10px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:16px;color:inherit;font:inherit;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;">
+    <span style="font-size:20px;">🔀</span>
+    <span class="name" style="flex:1;font-weight:600;font-size:16px;">Туннелирование</span>
+    <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
+</div>
+
+<!-- TUNNEL MODAL -->
+<div id="tunnelModal" style="position:fixed;inset:0;background:var(--scrim);z-index:300;display:none;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--card);border-radius:20px;padding:20px;width:100%;max-width:400px;max-height:85vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+      <h2 style="margin:0;font-size:18px;">Туннелирование</h2>
+      <button onclick="document.getElementById('tunnelModal').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer;">&times;</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Выберите приложения для обхода VPN. <span style="color:var(--on);">MAX обходит всегда.</span></p>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:15px;background:var(--bg);padding:10px;border-radius:10px;">
+      <input type="checkbox" id="tunnelEnabled" style="width:18px;height:18px;">
+      <label for="tunnelEnabled" style="font-size:14px;cursor:pointer;">Включить туннелирование</label>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:10px;">
+      <input type="text" id="appSearch" placeholder="Поиск..." class="input" style="margin-bottom:0;flex:1;" oninput="renderAppsList()">
+      <button onclick="toggleSelectAll()" style="padding:0 15px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:13px;cursor:pointer;">Все</button>
+    </div>
+    <div id="appsList" style="max-height:300px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:5px;margin-bottom:10px;"></div>
+    <p id="selectedCount" style="font-size:12px;color:var(--muted);margin-bottom:10px;">Выбрано: 0</p>
+    <button onclick="saveTunnelSettings()" class="btn">Сохранить</button>
+  </div>
 </div>
 
 <!-- ADMIN MODAL -->
 <div id="adminModal" style="position:fixed;inset:0;background:var(--scrim);z-index:300;display:none;align-items:center;justify-content:center;padding:20px;">
   <div style="background:var(--card);border-radius:20px;padding:20px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
-      <h2 style="margin:0;font-size:18px;">Админ-панель</h2>
-      <button onclick="document.getElementById('adminModal').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer;">&times;</button>
+    <div id="adminAuthView">
+      <h2 style="margin:0 0 15px;font-size:18px;text-align:center;">Вход в админку</h2>
+      <input type="password" id="adminPass" placeholder="Пароль" class="input">
+      <button onclick="loginAdmin()" class="btn">Войти</button>
+      <button onclick="document.getElementById('adminModal').style.display='none'" class="btn" style="background:transparent;color:var(--muted);border:1px solid var(--line);margin-top:10px;">Отмена</button>
+      <p id="adminAuthError" style="color:var(--danger);text-align:center;margin-top:10px;font-size:13px;"></p>
     </div>
-    
-    <input type="password" id="adminPass" placeholder="Пароль" class="input" style="margin-bottom:10px;">
-    
-    <div class="admin-tabs">
-      <div class="admin-tab active" onclick="switchTab('tab-vless', this)">VLESS</div>
-      <div class="admin-tab" onclick="switchTab('tab-create', this)">Создать</div>
-      <div class="admin-tab" onclick="switchTab('tab-list', this)">Список</div>
-    </div>
-
-    <!-- Вкладка VLESS -->
-    <div id="tab-vless" class="tab-content active">
-      <textarea id="adminVless" placeholder="vless://..." style="width:100%;height:80px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-family:monospace;font-size:12px;margin-bottom:10px;box-sizing:border-box;"></textarea>
-      <button onclick="updateVless()" class="btn">Обновить ссылку</button>
-    </div>
-
-    <!-- Вкладка Создать -->
-    <div id="tab-create" class="tab-content">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:5px;">Срок действия (дней):</p>
-      <input type="number" id="adminDays" value="30" class="input">
-      <button onclick="createKey()" class="btn">Сгенерировать ключ</button>
-      <p id="createdKey" style="margin-top:15px;font-family:monospace;text-align:center;color:var(--on);font-weight:bold;"></p>
-    </div>
-
-    <!-- Вкладка Список -->
-    <div id="tab-list" class="tab-content">
-      <div id="keysList" class="key-list"></div>
-      <button onclick="loadKeys()" class="btn">Обновить список</button>
+    <div id="adminMainView" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+        <h2 style="margin:0;font-size:18px;">Админ-панель</h2>
+        <button onclick="logoutAdmin()" style="background:none;border:none;color:var(--danger);font-size:14px;cursor:pointer;">Выйти</button>
+      </div>
+      <div class="admin-tabs">
+        <div class="admin-tab active" onclick="switchTab('tab-vless', this)">VLESS</div>
+        <div class="admin-tab" onclick="switchTab('tab-create', this)">Создать</div>
+        <div class="admin-tab" onclick="switchTab('tab-list', this)">Список</div>
+      </div>
+      <div id="tab-vless" class="tab-content active">
+        <textarea id="adminVless" placeholder="vless://..." style="width:100%;height:80px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font-family:monospace;font-size:12px;margin-bottom:10px;box-sizing:border-box;"></textarea>
+        <button onclick="updateVless()" class="btn">Обновить ссылку</button>
+      </div>
+      <div id="tab-create" class="tab-content">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:5px;">Дней:</p>
+        <input type="number" id="adminDays" value="30" class="input">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:5px;">Кол-во:</p>
+        <input type="number" id="adminCount" value="1" class="input" min="1" max="50">
+        <button onclick="createKey()" class="btn">Сгенерировать</button>
+        <div id="createdKeys" style="margin-top:15px;font-family:monospace;text-align:center;color:var(--on);font-weight:bold;"></div>
+      </div>
+      <div id="tab-list" class="tab-content">
+        <div id="adminStats" style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:12px; color:var(--muted);">
+          <span>Всего: <b id="statTotal">0</b></span>
+          <span>Занято: <b id="statBusy" style="color:var(--danger)">0</b></span>
+          <span>Свободно: <b id="statFree" style="color:var(--on)">0</b></span>
+        </div>
+        <input type="text" id="adminSearch" placeholder="Поиск..." class="input" style="margin-bottom:10px;" oninput="renderKeys()">
+        <div id="keysList" class="key-list"></div>
+        <button onclick="loadKeys()" class="btn">Обновить список</button>
+      </div>
     </div>
   </div>
 </div>
@@ -127,153 +161,67 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
 var API_URL = "https://sadaw-vpn-config.senakrivousov.workers.dev";
 var LOCS = [{f:"🇩🇪",n:"Германия",vless:"",ping:null}];
 var cur=0, state="off", timer=null, secs=0, vless="", gen=0;
+var currentAdminPass = "", allKeysData = [], allApps = [], isAllSelected = false;
 
-// --- EULA ---
 document.getElementById('eulaCheckbox').onchange = function() { document.getElementById('eulaBtn').disabled = !this.checked; };
-function acceptEula() {
-  localStorage.setItem("sadaw_eula_accepted", "true");
-  document.getElementById("eulaScreen").classList.remove("active");
-  if (localStorage.getItem("sadaw_sub_code")) { showMain(); } else { document.getElementById("loginScreen").classList.add("active"); }
-}
-window.addEventListener('DOMContentLoaded', function() {
-  if (localStorage.getItem("sadaw_eula_accepted") !== "true") {
-    document.getElementById("eulaScreen").classList.add("active");
-  } else if (!localStorage.getItem("sadaw_sub_code")) {
-    document.getElementById("loginScreen").classList.add("active");
-  } else {
-    showMain();
-  }
-});
-function showMain() {
-  document.getElementById("eulaScreen").classList.remove("active");
-  document.getElementById("loginScreen").classList.remove("active");
-  document.getElementById("app").style.display = "flex";
-  loadConfig();
-}
+function acceptEula() { localStorage.setItem("sadaw_eula_accepted", "true"); document.getElementById("eulaScreen").classList.remove("active"); if (localStorage.getItem("sadaw_sub_code")) showMain(); else document.getElementById("loginScreen").classList.add("active"); }
+window.addEventListener('DOMContentLoaded', function() { if (localStorage.getItem("sadaw_eula_accepted") !== "true") document.getElementById("eulaScreen").classList.add("active"); else if (!localStorage.getItem("sadaw_sub_code")) document.getElementById("loginScreen").classList.add("active"); else showMain(); });
+function showMain() { document.getElementById("eulaScreen").classList.remove("active"); document.getElementById("loginScreen").classList.remove("active"); document.getElementById("app").style.display = "flex"; loadConfig(); }
 
-// --- LOGIN ---
 function activateCode() {
   var code = document.getElementById("subCodeInput").value.trim().toUpperCase();
-  var err = document.getElementById("loginError");
-  var btn = document.getElementById("loginBtn");
-  if(code.length < 5) { err.textContent = "Код слишком короткий"; return; }
-  
+  var err = document.getElementById("loginError"), btn = document.getElementById("loginBtn");
+  if(code.length < 5) { err.textContent = "Короткий код"; return; }
   if (window.AndroidBridge && typeof window.AndroidBridge.checkSubscription === 'function') {
     btn.textContent = "Проверка..."; btn.disabled = true;
     setTimeout(function() {
       var result = window.AndroidBridge.checkSubscription(code);
-      if (result === "ok") {
-        localStorage.setItem("sadaw_sub_code", code);
-        if (!localStorage.getItem("sadaw_device_id")) { localStorage.setItem("sadaw_device_id", "dev_" + Math.random().toString(36).substring(2, 10)); }
-        showMain();
-      } else if (result === "expired") {
-        err.textContent = "Ваша подписка истекла!"; btn.textContent = "Активировать"; btn.disabled = false;
-      } else if (result === "busy") {
-        err.textContent = "Ключ уже занят!"; btn.textContent = "Активировать"; btn.disabled = false;
-      } else if (result === "invalid") {
-        err.textContent = "Неверный код."; btn.textContent = "Активировать"; btn.disabled = false;
-      } else {
-        err.textContent = "Ошибка сети."; btn.textContent = "Активировать"; btn.disabled = false;
-      }
+      if (result === "ok") { localStorage.setItem("sadaw_sub_code", code); if (!localStorage.getItem("sadaw_device_id")) localStorage.setItem("sadaw_device_id", "dev_" + Math.random().toString(36).substring(2, 10)); showMain(); }
+      else { err.textContent = result === "expired" ? "Истекла!" : result === "busy" ? "Занят!" : result === "invalid" ? "Неверный код." : "Ошибка."; btn.textContent = "Активировать"; btn.disabled = false; }
     }, 100);
   }
 }
 
-// --- APP LOGIC ---
 function loadConfig(){
-  var subCode = localStorage.getItem("sadaw_sub_code");
-  var deviceId = localStorage.getItem("sadaw_device_id");
+  var subCode = localStorage.getItem("sadaw_sub_code"), deviceId = localStorage.getItem("sadaw_device_id");
   if (!subCode || !deviceId) { setState("fail", "Нет ключа"); return; }
   fetch(API_URL + "/get-config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: subCode, deviceId: deviceId }) })
   .then(r => r.json()).then(d => {
-    if (d.error === "expired") {
-        localStorage.removeItem("sadaw_sub_code"); // Выкидываем
-        document.getElementById("app").style.display = "none";
-        document.getElementById("loginScreen").classList.add("active");
-        document.getElementById("loginError").textContent = "Подписка истекла. Введите новый код.";
-        return;
-    }
+    if (d.error === "expired") { localStorage.removeItem("sadaw_sub_code"); document.getElementById("app").style.display = "none"; document.getElementById("loginScreen").classList.add("active"); document.getElementById("loginError").textContent = "Истекла."; return; }
     if (d.error) { setState("fail", d.error); return; }
     if (d.vless) { LOCS = [{ f: "🇩🇪", n: "Германия", vless: d.vless, ping: null }]; cur = 0; renderLoc(); pingAllServers(); }
     setState("off");
   }).catch(e => setState("fail", "Ошибка сети"));
 }
-function pingAllServers(){
-  if(!window.AndroidBridge || typeof window.AndroidBridge.ping !== 'function') return;
-  LOCS.forEach((loc, index) => {
-    if(!loc.vless) return;
-    var match = loc.vless.match(/@([^:]+):(\d+)/);
-    if(match) window.AndroidBridge.ping(match[1], parseInt(match[2]), index);
-  });
-}
-window.onPingResult = function(index, pingMs) {
-  if(LOCS[index]){ LOCS[index].ping = pingMs > 0 ? pingMs : null; if(index === cur) renderLoc(); }
-};
+function pingAllServers(){ if(!window.AndroidBridge || typeof window.AndroidBridge.ping !== 'function') return; LOCS.forEach((loc, index) => { if(!loc.vless) return; var match = loc.vless.match(/@([^:]+):(\d+)/); if(match) window.AndroidBridge.ping(match[1], parseInt(match[2]), index); }); }
+window.onPingResult = function(index, pingMs) { if(LOCS[index]){ LOCS[index].ping = pingMs > 0 ? pingMs : null; if(index === cur) renderLoc(); } };
 function renderLoc(){ var l = LOCS[cur]; document.getElementById("locFlag").textContent = l.f; document.getElementById("locName").textContent = l.n; document.getElementById("locPing").innerHTML = l.ping ? l.ping + " мс" : "— мс"; }
-function setState(s, reason){
-  state=s; document.getElementById("app").setAttribute("data-s",s); document.getElementById("go").disabled = (s==="connecting");
-  if(s==="fail"){ document.getElementById("title").textContent="Не удалось"; document.getElementById("sub").textContent=reason||"Повторите"; }
-  if(s==="off"){ document.getElementById("title").textContent="Не подключено"; document.getElementById("sub").textContent="Нажмите на круг"; }
-  if(s==="connecting"){ document.getElementById("title").textContent="Подключение…"; document.getElementById("sub").textContent=LOCS[cur].n; }
-  if(s==="on"){ document.getElementById("title").textContent="Подключено"; tick(); }
-}
+function setState(s, reason){ state=s; document.getElementById("app").setAttribute("data-s",s); document.getElementById("go").disabled = (s==="connecting"); if(s==="fail"){ document.getElementById("title").textContent="Не удалось"; document.getElementById("sub").textContent=reason||"Повторите"; } if(s==="off"){ document.getElementById("title").textContent="Не подключено"; document.getElementById("sub").textContent="Нажмите на круг"; } if(s==="connecting"){ document.getElementById("title").textContent="Подключение…"; document.getElementById("sub").textContent=LOCS[cur].n; } if(s==="on"){ document.getElementById("title").textContent="Подключено"; tick(); } }
 function tick(){ clearInterval(timer); secs=0; document.getElementById("sub").textContent="00:00:00"; timer=setInterval(() => { secs++; document.getElementById("sub").textContent = new Date(secs*1000).toISOString().substr(11, 8); }, 1000); }
-function start(){
-  var my = ++gen; clearInterval(timer); setState("connecting"); vless = LOCS[cur].vless;
-  if(!vless) { setState("fail", "Нет конфига"); return; }
-  if (window.AndroidBridge && typeof window.AndroidBridge.connect === 'function') {
-    window.AndroidBridge.connect(vless);
-    window.onVpnResult = function(ok) { if (my !== gen) return; if (ok) setState("on"); else setState("fail", "VPN не запущен"); };
-  } else { setTimeout(() => { if(my===gen) setState("on"); }, 500); }
-}
+function start(){ var my = ++gen; clearInterval(timer); setState("connecting"); vless = LOCS[cur].vless; if(!vless) { setState("fail", "Нет конфига"); return; } if (window.AndroidBridge && typeof window.AndroidBridge.connect === 'function') { window.AndroidBridge.connect(vless); window.onVpnResult = function(ok) { if (my !== gen) return; if (ok) setState("on"); else setState("fail", "Ошибка"); }; } else setTimeout(() => { if(my===gen) setState("on"); }, 500); }
 function stop(){ gen++; clearInterval(timer); if (window.AndroidBridge && typeof window.AndroidBridge.disconnect === 'function') window.AndroidBridge.disconnect(); setState("off"); }
 document.getElementById("go").onclick = () => { if(state==="on") stop(); else start(); };
-document.getElementById("themeBtn").onclick = () => { var r = document.documentElement; var t = r.getAttribute("data-theme") === "dark" ? "light" : "dark"; r.setAttribute("data-theme", t); };
+document.getElementById("themeBtn").onclick = () => { var r = document.documentElement; r.setAttribute("data-theme", r.getAttribute("data-theme") === "dark" ? "light" : "dark"); };
 
-// --- ADMIN PANEL ---
-document.getElementById("secretAdminBtn").onclick = function() { document.getElementById("adminModal").style.display = "flex"; };
-function switchTab(id, el) {
-  document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
-  document.querySelectorAll('.admin-tab').forEach(e => e.classList.remove('active'));
-  document.getElementById(id).classList.add('active'); el.classList.add('active');
-  if (id === 'tab-list') loadKeys();
-}
-function getPass() { return document.getElementById("adminPass").value; }
+// --- АДМИНКА ---
+document.getElementById("secretAdminBtn").onclick = function() { document.getElementById("adminAuthView").style.display = "block"; document.getElementById("adminMainView").style.display = "none"; document.getElementById("adminPass").value = ""; document.getElementById("adminAuthError").textContent = ""; document.getElementById("adminModal").style.display = "flex"; };
+function loginAdmin() { var pass = document.getElementById("adminPass").value.trim(); if (!pass) return; fetch(API_URL + "/admin/get-keys", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pass }) }).then(r => r.json()).then(res => { if (res.ok) { currentAdminPass = pass; document.getElementById("adminAuthView").style.display = "none"; document.getElementById("adminMainView").style.display = "block"; } else document.getElementById("adminAuthError").textContent = "Неверный пароль"; }).catch(e => document.getElementById("adminAuthError").textContent = "Ошибка сети"); }
+function logoutAdmin() { document.getElementById("adminModal").style.display = "none"; currentAdminPass = ""; }
+function switchTab(id, el) { document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active')); document.querySelectorAll('.admin-tab').forEach(e => e.classList.remove('active')); document.getElementById(id).classList.add('active'); el.classList.add('active'); if (id === 'tab-list') loadKeys(); }
+function updateVless() { var link = document.getElementById("adminVless").value.trim(); fetch(API_URL + "/admin/update-vless", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: currentAdminPass, vless: link }) }).then(r => r.json()).then(res => { if (res.ok) alert("✅ Обновлено"); }); }
+function createKey() { var days = document.getElementById("adminDays").value, count = document.getElementById("adminCount").value; fetch(API_URL + "/admin/create-key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: currentAdminPass, days: days, count: count }) }).then(r => r.json()).then(res => { if (res.ok) { document.getElementById("createdKeys").innerHTML = res.keys.join("<br>"); alert("✅ Создано: " + res.keys.length); } }); }
+function loadKeys() { fetch(API_URL + "/admin/get-keys", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: currentAdminPass }) }).then(r => r.json()).then(res => { if (!res.ok) return; document.getElementById("statTotal").textContent = res.stats.total; document.getElementById("statBusy").textContent = res.stats.busy; document.getElementById("statFree").textContent = res.stats.free; allKeysData = res.keys; renderKeys(); }); }
+function renderKeys() { var query = document.getElementById("adminSearch").value.toUpperCase(); var html = ""; allKeysData.forEach(k => { if (query && !k.key.includes(query)) return; var exp = k.expires_at ? new Date(k.expires_at).toLocaleDateString() : "Бессрочно"; var isBusy = k.device_id ? "🔴 Занят" : "🟢 Свободен"; html += `<div class="key-item"><b>${k.key}</b><br>Статус: ${isBusy}<br>До: ${exp}<br><div style="display:flex;gap:5px;margin-top:5px;"><button onclick="extendKey('${k.key}',30)" style="padding:5px 10px;border-radius:5px;border:none;background:var(--btn);color:var(--btntext);cursor:pointer;font-size:11px;">+30 дней</button><button onclick="delKey('${k.key}')" style="padding:5px 10px;border-radius:5px;border:none;background:var(--danger);color:white;cursor:pointer;font-size:11px;">Удалить</button></div></div>`; }); document.getElementById("keysList").innerHTML = html || "Нет ключей"; }
+function extendKey(key, days) { fetch(API_URL + "/admin/extend-key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: currentAdminPass, key: key, days: days }) }).then(r => r.json()).then(res => { if (res.ok) loadKeys(); }); }
+function delKey(key) { if (!confirm("Удалить?")) return; fetch(API_URL + "/admin/delete-key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: currentAdminPass, key: key }) }).then(r => r.json()).then(res => { if (res.ok) loadKeys(); }); }
 
-function updateVless() {
-  var pass = getPass(); var link = document.getElementById("adminVless").value.trim();
-  if (!link.startsWith("vless://")) { alert("Неверная ссылка"); return; }
-  fetch(API_URL + "/admin/update-vless", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pass, vless: link }) })
-  .then(r => r.json()).then(res => { if (res.ok) { alert("✅ Ссылка обновлена"); if (LOCS[0]) { LOCS[0].vless = link; pingAllServers(); } } else alert("❌ " + res.error); });
-}
-function createKey() {
-  var pass = getPass(); var days = document.getElementById("adminDays").value;
-  fetch(API_URL + "/admin/create-key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pass, days: days }) })
-  .then(r => r.json()).then(res => {
-    if (res.ok) { document.getElementById("createdKey").textContent = res.key; alert("✅ Ключ создан: " + res.key); }
-    else alert("❌ " + res.error);
-  });
-}
-function loadKeys() {
-  var pass = getPass();
-  fetch(API_URL + "/admin/get-keys", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pass }) })
-  .then(r => r.json()).then(res => {
-    if (!res.ok) { document.getElementById("keysList").innerHTML = "<p style='color:red'>Ошибка доступа</p>"; return; }
-    var html = "";
-    res.keys.forEach(k => {
-      var exp = k.expires_at ? new Date(k.expires_at).toLocaleDateString() : "Бессрочно";
-      var isBusy = k.device_id ? "🔴 Занят" : "🟢 Свободен";
-      html += `<div class="key-item"><b>${k.key}</b><br>Статус: ${isBusy}<br>До: ${exp}<br><button onclick="delKey('${k.key}')" style="margin-top:5px;padding:5px 10px;border-radius:5px;border:none;background:var(--danger);color:white;cursor:pointer;font-size:11px;">Удалить</button></div>`;
-    });
-    document.getElementById("keysList").innerHTML = html || "Ключей нет";
-  });
-}
-function delKey(key) {
-  var pass = getPass();
-  if (!confirm("Удалить ключ " + key + "?")) return;
-  fetch(API_URL + "/admin/delete-key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pass, key: key }) })
-  .then(r => r.json()).then(res => { if (res.ok) loadKeys(); else alert("Ошибка удаления"); });
-}
+// --- ТУННЕЛИРОВАНИЕ ---
+document.getElementById("tunnelBtn").onclick = function() { document.getElementById("tunnelEnabled").checked = localStorage.getItem("sadaw_tunnel_enabled") === "true"; document.getElementById("appsList").innerHTML = "<p style='text-align:center;color:var(--muted);padding:20px;'>Загрузка...</p>"; document.getElementById("tunnelModal").style.display = "flex"; loadAppsForTunnel(); };
+function loadAppsForTunnel() { if (window.AndroidBridge && typeof window.AndroidBridge.getInstalledApps === 'function') { allApps = JSON.parse(window.AndroidBridge.getInstalledApps()); renderAppsList(); } }
+function renderAppsList() { var search = document.getElementById("appSearch").value.toLowerCase(), container = document.getElementById("appsList"), saved = JSON.parse(localStorage.getItem("sadaw_tunnel_bypass") || "[]"), html = ""; allApps.forEach(function(app) { if (search && !app.label.toLowerCase().includes(search)) return; var isForced = app.isMax; var isChecked = isForced || saved.includes(app.packageName); html += `<div style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid var(--line);"><input type="checkbox" class="app-checkbox" data-pkg="${app.packageName}" ${isChecked ? 'checked' : ''} ${isForced ? 'disabled' : ''} onchange="updateSelectedCount()" style="width:18px;height:18px;"><span style="font-size:14px;flex:1;">${app.label}</span>${isForced ? '<span style="font-size:10px;color:var(--muted);">(всегда)</span>' : ''}</div>`; }); container.innerHTML = html || "Не найдено"; updateSelectedCount(); }
+function updateSelectedCount() { var c = document.querySelectorAll(".app-checkbox:checked:not(:disabled)").length, f = document.querySelectorAll(".app-checkbox:disabled").length; document.getElementById("selectedCount").textContent = "Выбрано: " + (c + f) + " (вкл. MAX)"; }
+function toggleSelectAll() { isAllSelected = !isAllSelected; document.querySelectorAll(".app-checkbox:not(:disabled)").forEach(cb => cb.checked = isAllSelected); updateSelectedCount(); }
+function saveTunnelSettings() { var enabled = document.getElementById("tunnelEnabled").checked, checkboxes = document.querySelectorAll(".app-checkbox:checked"), list = []; checkboxes.forEach(cb => list.push(cb.dataset.pkg)); list = [...new Set(list)]; localStorage.setItem("sadaw_tunnel_enabled", enabled); localStorage.setItem("sadaw_tunnel_bypass", JSON.stringify(list)); if (window.AndroidBridge && typeof window.AndroidBridge.setSplitTunneling === 'function') { window.AndroidBridge.setSplitTunneling(enabled, true, JSON.stringify(list)); alert("✅ Сохранено"); } document.getElementById("tunnelModal").style.display = "none"; }
 </script>
 </body>
 </html>

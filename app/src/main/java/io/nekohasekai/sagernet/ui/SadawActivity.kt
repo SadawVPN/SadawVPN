@@ -3,9 +3,13 @@ package io.nekohasekai.sagernet.ui
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.net.VpnService
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -20,6 +24,7 @@ import io.nekohasekai.sagernet.ktx.parseProxies
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
@@ -28,7 +33,6 @@ class SadawActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private val TAG = "SadawVPN"
     private val REQ_VPN = 1001
-    // Временный URL (позже заменим на твой VPS)
     private val API_BASE = "https://sadaw-vpn-config.senakrivousov.workers.dev"
     private var currentProfileId: Long = -1L
     private var forcedBypassPackages = mutableSetOf<String>()
@@ -127,6 +131,17 @@ class SadawActivity : AppCompatActivity() {
             webView.post { webView.evaluateJavascript("window.onVpnStopped && window.onVpnStopped()", null) }
         }
 
+        private fun drawableToBase64(drawable: Drawable): String {
+            val size = 96
+            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(canvas)
+            val outputStream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+            return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+        }
+
         @JavascriptInterface
         fun getInstalledApps(): String {
             val pm = packageManager
@@ -138,7 +153,6 @@ class SadawActivity : AppCompatActivity() {
             for (app in sortedApps) {
                 if (pm.getLaunchIntentForPackage(app.packageName) == null) continue
                 val label = pm.getApplicationLabel(app).toString()
-                // Простой поиск MAX (как ты и просил, без лишних умностей)
                 val isMax = label.contains("MAX", ignoreCase = true) || 
                             label.contains("МАКС", ignoreCase = true) || 
                             app.packageName.contains("max", ignoreCase = true)
@@ -149,6 +163,13 @@ class SadawActivity : AppCompatActivity() {
                 appInfo.put("packageName", app.packageName)
                 appInfo.put("label", label)
                 appInfo.put("isMax", isMax)
+                
+                try {
+                    val icon = pm.getApplicationIcon(app.packageName)
+                    appInfo.put("icon", drawableToBase64(icon))
+                } catch (e: Exception) {
+                    appInfo.put("icon", "")
+                }
                 jsonArray.put(appInfo)
             }
             return jsonArray.toString()
@@ -163,7 +184,6 @@ class SadawActivity : AppCompatActivity() {
             }
             val finalList = (packageList + forcedBypassPackages).distinct()
             val individualString = finalList.joinToString("\n")
-            
             DataStore.proxyApps = enabled
             DataStore.bypass = bypassMode
             DataStore.individual = individualString

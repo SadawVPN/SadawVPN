@@ -2,6 +2,9 @@ name: Build SadawVPN
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -69,8 +72,13 @@ jobs:
           $APKSIGNER sign --ks sadaw.keystore --ks-pass pass:sadaw123 --key-pass pass:sadaw123 --ks-key-alias sadaw --out SadawVPN.apk app-aligned.apk
           $APKSIGNER verify --verbose SadawVPN.apk
 
-      - name: Upload SadawVPN
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: SadawVPN
-          path: SadawVPN.apk
+          tag_name: v${{ github.run_number }}
+          name: SadawVPN v${{ github.run_number }}
+          files: SadawVPN.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

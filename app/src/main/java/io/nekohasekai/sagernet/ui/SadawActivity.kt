@@ -35,11 +35,14 @@ class SadawActivity : AppCompatActivity() {
     private var currentProfileId: Long = -1L
     private var forcedBypassPackages = mutableSetOf<String>()
 
-    // ⚠️ ТВОИ ДАННЫЕ
+    // Данные панели 3x-ui
     private val PANEL_URL = "https://s-26313.pl3.h1clayd.click/VKdsW4izxEXISHud"
     private val API_TOKEN = "YtD6QHIPg1kKSZujaMwNfKNZXwNPKIsmpUBXvlo7dlQzHqVZ"
     private val INBOUND_ID = "1"
     private val MASTER_KEY = "SADAW-BETA"
+
+    // ЕДИНАЯ VLESS-ССЫЛКА ДЛЯ ВСЕХ (вшита)
+    private val DEFAULT_VLESS = "vless://889b187f-8c70-477f-82e8-be656b1ae19d@83.171.241.170:443?type=tcp&security=reality&pbk=YzaUfG1RjI4nYhuNOIlgMwPJZp-kJjJsDZNzJcZgT3c&fp=chrome&sni=www.microsoft.com&sid=03741d89d5720343&spx=%2Fwf7WAaUx8teYJ0E#SadawVPN"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,7 +62,6 @@ class SadawActivity : AppCompatActivity() {
     }
 
     inner class Bridge {
-        // ПРЯМОЙ ЗАПРОС С API-ТОКЕНОМ (без логина и куки)
         private fun apiRequest(endpoint: String, method: String, body: String? = null): String {
             return try {
                 val url = URL("${PANEL_URL}/panel/api/${endpoint}")
@@ -67,10 +69,8 @@ class SadawActivity : AppCompatActivity() {
                 conn.requestMethod = method
                 conn.setRequestProperty("Authorization", "Bearer ${API_TOKEN}")
                 conn.setRequestProperty("Content-Type", "application/json")
-                conn.setRequestProperty("Accept", "application/json")
                 conn.connectTimeout = 10000
                 conn.readTimeout = 10000
-                
                 if (body != null) {
                     conn.doOutput = true
                     val os = conn.outputStream
@@ -78,7 +78,6 @@ class SadawActivity : AppCompatActivity() {
                     os.flush()
                     os.close()
                 }
-                
                 if (conn.responseCode in 200..299) {
                     conn.inputStream.bufferedReader().use { it.readText() }
                 } else {
@@ -86,7 +85,6 @@ class SadawActivity : AppCompatActivity() {
                     "error: HTTP ${conn.responseCode} $err"
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "API Error: ${e.message}")
                 "error: ${e.message}"
             }
         }
@@ -101,31 +99,10 @@ class SadawActivity : AppCompatActivity() {
             } catch (e: Exception) { "error" }
         }
 
+        // ВСЕГДА ВОЗВРАЩАЕМ ОДНУ И ТУ ЖЕ ССЫЛКУ (для любого ключа)
         @JavascriptInterface
         fun getConfig(subKey: String): String {
-            if (subKey == MASTER_KEY) {
-                val saved = getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
-                    .getString("master_vless", "") ?: ""
-                return saved
-            }
-            return try {
-                val clientRes = apiRequest("clients/get/${subKey}", "GET")
-                if (clientRes.startsWith("error:") || !clientRes.contains("\"success\":true")) return ""
-                val client = JSONObject(clientRes).getJSONObject("obj").getJSONObject("client")
-                val uuid = client.getString("uuid")
-
-                val inboundRes = apiRequest("inbounds/get/${INBOUND_ID}", "GET")
-                if (inboundRes.startsWith("error:")) return ""
-                val inbound = JSONObject(inboundRes).getJSONObject("obj")
-                val streamSettings = JSONObject(inbound.getString("streamSettings"))
-                val reality = streamSettings.getJSONObject("realitySettings")
-                val port = inbound.getInt("port")
-                val pbk = reality.getString("publicKey")
-                val sni = reality.getJSONArray("serverNames").getString(0)
-                val sid = reality.getJSONArray("shortIds").getString(0)
-
-                "vless://${uuid}@83.171.241.170:${port}?type=tcp&security=reality&pbk=${pbk}&fp=chrome&sni=${sni}&sid=${sid}&spx=%2F#SadawVPN"
-            } catch (e: Exception) { "" }
+            return DEFAULT_VLESS
         }
 
         @JavascriptInterface
@@ -142,7 +119,7 @@ class SadawActivity : AppCompatActivity() {
                     }
                     "getMasterVless" -> {
                         return getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
-                            .getString("master_vless", "") ?: ""
+                            .getString("master_vless", DEFAULT_VLESS) ?: DEFAULT_VLESS
                     }
                     "create" -> {
                         val days = data.optInt("days", 30)
@@ -198,7 +175,6 @@ class SadawActivity : AppCompatActivity() {
                     SagerNet.stopService()
                     Thread.sleep(500)
                     
-                    // Проверяем, что ссылка реальная
                     if (!vlessUri.startsWith("vless://") || vlessUri.length < 20) {
                         webView.post { webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(false)", null) }
                         return@Thread

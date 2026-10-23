@@ -13,7 +13,7 @@ html{height:100%}*,*::before,*::after{box-sizing:border-box;-webkit-tap-highligh
 body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"Sora",system-ui,sans-serif}
 .app{max-width:440px;height:100%;margin:0 auto;padding:20px;display:flex;flex-direction:column}
 .top{display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:18px}
-.theme{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.theme{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;min-height:0}
 .ring{width:210px;height:210px;padding:0;border-radius:50%;border:3px solid var(--line);background:var(--card);color:inherit;display:grid;place-items:center;cursor:pointer;transition:.4s}
 .ring:disabled{cursor:wait}
@@ -25,7 +25,7 @@ body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"So
 @keyframes spin{to{transform:rotate(360deg)}}
 .status{text-align:center}.status h1{margin:0;font-size:26px;font-weight:700}.status p{margin:6px 0 0;color:var(--muted);font-size:15px;font-variant-numeric:tabular-nums}
 .app[data-s="on"] .status h1{color:var(--on)}.app[data-s="fail"] .status h1{color:var(--danger)}
-.loc{width:100%;display:flex;align-items:center;gap:14px;padding:16px;background:var(--card);border:1px solid var(--line);border-radius:16px;color:inherit;text-align:left;cursor:pointer;margin-top:10px;}
+.loc{width:100%;display:flex;align-items:center;gap:14px;padding:16px;background:var(--card);border:1px solid var(--line);border-radius:16px;color:inherit;text-align:left;cursor:pointer;margin-top:10px}
 .loc:active{opacity:.8}
 .loc .name{flex:1;display:flex;flex-direction:column}
 .loc .name b{font-size:16px}.loc .name span{font-size:13px;color:var(--muted)}
@@ -64,10 +64,10 @@ input:disabled + .slider{opacity:.6}
 <div id="eulaScreen" class="screen active">
   <h2 style="text-align:center;margin-bottom:15px;">Пользовательское соглашение</h2>
   <div style="flex:1;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px;font-size:12px;line-height:1.5;margin-bottom:15px;text-align:justify;">
-    <p>1. Использование приложения возможно только после полного согласия. Сервис предоставляется «как есть».</p>
-    <p>2. Один ключ = одно устройство. Запрещено использовать сервис для нарушения законодательства.</p>
+    <p>1. Использование приложения возможно только после полного согласия.</p>
+    <p>2. Один ключ = одно устройство. Запрещено нарушать законодательство.</p>
     <p>3. Политика No-Logs. Мы не храним историю посещений.</p>
-    <p>4. Пользователь несёт полную ответственность за свои действия в сети.</p>
+    <p>4. Пользователь несёт полную ответственность за свои действия.</p>
     <p>5. Соглашение регулируется законодательством РФ.</p>
     <p>6. Email: sadawvpnhelp@gmail.com</p>
   </div>
@@ -143,7 +143,7 @@ input:disabled + .slider{opacity:.6}
         <div class="admin-tab" onclick="switchTab('tab-list', this)">Список</div>
       </div>
       <div id="tab-vless" class="tab-content active">
-        <p style="font-size:13px;color:var(--muted);margin-bottom:8px;">VLESS-ссылка для мастер-ключа <b>SADAW-BETA</b>:</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:8px;">VLESS-ссылка для <b>SADAW-BETA</b>:</p>
         <textarea id="adminVless" class="input" style="height:100px;text-align:left;font-family:monospace;font-size:11px;resize:none;" placeholder="vless://..."></textarea>
         <button onclick="saveMasterVless()" class="btn">Сохранить ссылку</button>
       </div>
@@ -187,7 +187,7 @@ function activateCode(){
     setTimeout(function(){
       var r=window.AndroidBridge.checkSubscription(code);
       if(r==="ok"){localStorage.setItem("sadaw_sub_code",code);showMain();}
-      else{err.textContent=r==="expired"?"Истекла!":"Неверный код";btn.textContent="Активировать";btn.disabled=false;}
+      else{err.textContent=r==="expired"?"Истекла!":r==="error"?"Ошибка сети (3x-ui недоступен)":"Неверный код";btn.textContent="Активировать";btn.disabled=false;}
     },100);
   }
 }
@@ -197,7 +197,7 @@ function checkVpnStatus(){
   if(cfg&&cfg.startsWith("vless://")){
     var m=cfg.match(/@([^:]+):(\d+)/);
     if(m&&window.AndroidBridge.ping)window.AndroidBridge.ping(m[1],parseInt(m[2]),0);
-  }else{setState("fail","Нет конфига. Зайдите в админку (S) → VLESS");}
+  }else{setState("fail","Нет конфига. Админка (S) → VLESS");}
 }
 window.onPingResult=function(i,ms){document.getElementById("locPing").innerHTML=ms>0?ms+" мс":"— мс";};
 function setState(s,reason){state=s;document.getElementById("app").setAttribute("data-s",s);document.getElementById("go").disabled=(s==="connecting");
@@ -245,11 +245,13 @@ function createKey(){
   var days=document.getElementById("adminDays").value;
   var r=window.AndroidBridge.adminAction("create",JSON.stringify({password:currentAdminPass,days:days}));
   if(r&&!r.startsWith("error")&&r!=="auth"){document.getElementById("createdKeys").textContent=r;showToast("Ключ создан!");}
-  else showToast("Ошибка","error");
+  else if(r==="auth"){showToast("Неверный пароль","error");}
+  else{showToast(r||"Ошибка","error");}
 }
 function loadKeys(){
   var r=window.AndroidBridge.adminAction("list",JSON.stringify({password:currentAdminPass}));
   if(r==="auth"){logoutAdmin();return;}
+  if(r.startsWith("error")){document.getElementById("keysList").innerHTML="<p style='color:var(--danger)'>"+r+"</p>";return;}
   try{
     allKeysData=JSON.parse(r);
     var html="";
@@ -258,7 +260,7 @@ function loadKeys(){
       html+=`<div class="key-item"><b>${k.email}</b><br>Статус: ${k.enable?"Активен":"Отключен"}<br>До: ${exp}</div>`;
     });
     document.getElementById("keysList").innerHTML=html||"Нет ключей";
-  }catch(e){document.getElementById("keysList").innerHTML="Ошибка";}
+  }catch(e){document.getElementById("keysList").innerHTML="Ошибка парсинга";}
 }
 
 // --- ТУННЕЛИРОВАНИЕ ---
@@ -269,7 +271,7 @@ function openTunnel(){
 }
 window.onAppsLoaded=function(b64){
   try{allApps=JSON.parse(atob(b64));renderAppsList();}
-  catch(e){document.getElementById("appsList").innerHTML="<p style='text-align:center;color:var(--danger);padding:20px;'>Ошибка</p>";}
+  catch(e){document.getElementById("appsList").innerHTML="<p style='text-align:center;color:var(--danger);padding:20px;'>Ошибка загрузки</p>";}
 };
 function renderAppsList(){
   var q=document.getElementById("appSearch").value.toLowerCase();

@@ -35,12 +35,12 @@ class SadawActivity : AppCompatActivity() {
     private var currentProfileId: Long = -1L
     private var forcedBypassPackages = mutableSetOf<String>()
 
-    // Панель 3x-ui (вшито)
+    // Настройки твоей панели 3x-ui
     private val PANEL_URL = "https://s-26313.pl3.h1clayd.click/VKdsW4izxEXISHud"
-    private val API_TOKEN = "YtD6QHIPg1kKSZujaMwNfKNZXwNPKIsmpUBXvlo7dlQzHqVZ"
     private val INBOUND_ID = "1"
+    private val PANEL_LOGIN = "dXZV3T0IOjSM"
+    private val PANEL_PASSWORD = "vbXiqeszbceHdR4BeFAk"
 
-    // Вшитый базовый ключ (всегда работает)
     private val MASTER_KEY = "SADAW-BETA"
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -61,15 +61,67 @@ class SadawActivity : AppCompatActivity() {
     }
 
     inner class Bridge {
+        private var sessionCookie: String? = null
+        private var csrfToken: String? = null
+
+        private fun login(): Boolean {
+            return try {
+                val url = URL("${PANEL_URL}/login")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                
+                val body = JSONObject().put("username", PANEL_LOGIN).put("password", PANEL_PASSWORD).toString()
+                val os = conn.outputStream
+                os.write(body.toByteArray())
+                os.flush()
+                os.close()
+
+                if (conn.responseCode in 200..299) {
+                    val cookies = conn.headerFields["Set-Cookie"]
+                    if (cookies != null) {
+                        sessionCookie = cookies.firstOrNull { it.contains("3x-ui=") || it.contains("session=") }?.substringBefore(";")
+                    }
+                    getCsrfToken()
+                    return sessionCookie != null
+                }
+                false
+            } catch (e: Exception) {
+                Log.e(TAG, "Login error: ${e.message}")
+                false
+            }
+        }
+
+        private fun getCsrfToken() {
+            try {
+                val url = URL("${PANEL_URL}/csrf-token")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.setRequestProperty("Cookie", sessionCookie ?: "")
+                if (conn.responseCode in 200..299) {
+                    val resp = conn.inputStream.bufferedReader().use { it.readText() }
+                    val json = JSONObject(resp)
+                    csrfToken = json.optString("obj", json.optString("token", ""))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "CSRF error: ${e.message}")
+            }
+        }
+
         private fun apiRequest(endpoint: String, method: String, body: String? = null): String {
+            if (sessionCookie == null) {
+                if (!login()) return "error: не удалось войти в панель"
+            }
             return try {
                 val url = URL("${PANEL_URL}/panel/api/${endpoint}")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = method
-                conn.setRequestProperty("Authorization", "Bearer ${API_TOKEN}")
+                conn.setRequestProperty("Cookie", sessionCookie ?: "")
                 conn.setRequestProperty("Content-Type", "application/json")
-                conn.connectTimeout = 8000
-                conn.readTimeout = 8000
+                if (csrfToken != null) conn.setRequestProperty("X-CSRF-Token", csrfToken!!)
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                
                 if (body != null) {
                     conn.doOutput = true
                     val os = conn.outputStream
@@ -77,10 +129,18 @@ class SadawActivity : AppCompatActivity() {
                     os.flush()
                     os.close()
                 }
-                if (conn.responseCode in 200..299) conn.inputStream.bufferedReader().use { it.readText() } else ""
+                
+                if (conn.responseCode in 200..299) {
+                    conn.inputStream.bufferedReader().use { it.readText() }
+                } else if (conn.responseCode == 401 || conn.responseCode == 403) {
+                    sessionCookie = null
+                    csrfToken = null
+                    "error: сессия истекла"
+                } else {
+                    "error: HTTP ${conn.responseCode}"
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "API Error: ${e.message}")
-                ""
+                "error: ${e.message}"
             }
         }
 
@@ -89,25 +149,25 @@ class SadawActivity : AppCompatActivity() {
             if (subKey == MASTER_KEY) return "ok"
             return try {
                 val res = apiRequest("clients/get/${subKey}", "GET")
+                if (res.startsWith("error:")) return "error"
                 if (res.contains("\"success\":true")) "ok" else "invalid"
-            } catch (e: Exception) { "invalid" }
+            } catch (e: Exception) { "error" }
         }
 
         @JavascriptInterface
         fun getConfig(subKey: String): String {
             if (subKey == MASTER_KEY) {
-                val prefs = getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
-                return prefs.getString("master_vless", "") ?: ""
+                return getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
+                    .getString("master_vless", "") ?: ""
             }
             return try {
                 val clientRes = apiRequest("clients/get/${subKey}", "GET")
-                if (!clientRes.contains("\"success\":true")) return ""
+                if (clientRes.startsWith("error:") || !clientRes.contains("\"success\":true")) return ""
                 val client = JSONObject(clientRes).getJSONObject("obj").getJSONObject("client")
                 val uuid = client.getString("uuid")
-                val flow = client.optString("flow", "")
 
                 val inboundRes = apiRequest("inbounds/get/${INBOUND_ID}", "GET")
-                if (!inboundRes.contains("\"success\":true")) return ""
+                if (inboundRes.startsWith("error:")) return ""
                 val inbound = JSONObject(inboundRes).getJSONObject("obj")
                 val streamSettings = JSONObject(inbound.getString("streamSettings"))
                 val reality = streamSettings.getJSONObject("realitySettings")
@@ -116,9 +176,7 @@ class SadawActivity : AppCompatActivity() {
                 val sni = reality.getJSONArray("serverNames").getString(0)
                 val sid = reality.getJSONArray("shortIds").getString(0)
 
-                var link = "vless://${uuid}@83.171.241.170:${port}?type=tcp&security=reality&pbk=${pbk}&fp=firefox&sni=${sni}&sid=${sid}&spx=%2F#SadawVPN"
-                if (flow.isNotEmpty()) link += "&flow=${flow}"
-                link
+                "vless://${uuid}@83.171.241.170:${port}?type=tcp&security=reality&pbk=${pbk}&fp=chrome&sni=${sni}&sid=${sid}&spx=%2F#SadawVPN"
             } catch (e: Exception) { "" }
         }
 
@@ -126,13 +184,12 @@ class SadawActivity : AppCompatActivity() {
         fun adminAction(action: String, dataJson: String): String {
             try {
                 val data = JSONObject(dataJson)
-                if (data.getString("password") != "ors192289") return "auth"
+                if (data.optString("password") != "ors192289") return "auth"
 
                 when (action) {
                     "setMasterVless" -> {
-                        val link = data.getString("vless")
                         getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
-                            .edit().putString("master_vless", link).apply()
+                            .edit().putString("master_vless", data.getString("vless")).apply()
                         return "ok"
                     }
                     "getMasterVless" -> {
@@ -144,8 +201,13 @@ class SadawActivity : AppCompatActivity() {
                         val newKey = "sadaw_" + UUID.randomUUID().toString().substring(0, 6)
                         val expireTime = System.currentTimeMillis() + days * 86400 * 1000L
 
-                        val res = apiRequest("inbounds/get/${INBOUND_ID}", "GET")
-                        val inbound = JSONObject(res).getJSONObject("obj")
+                        val getRes = apiRequest("inbounds/get/${INBOUND_ID}", "GET")
+                        if (getRes.startsWith("error:")) return getRes
+                        
+                        val inboundObj = JSONObject(getRes)
+                        if (!inboundObj.optBoolean("success", false)) return "error: панель не отдала инбаунд"
+
+                        val inbound = inboundObj.getJSONObject("obj")
                         val settings = JSONObject(inbound.getString("settings"))
                         val clients = settings.getJSONArray("clients")
 
@@ -153,19 +215,26 @@ class SadawActivity : AppCompatActivity() {
                         newClient.put("id", UUID.randomUUID().toString())
                         newClient.put("flow", "xtls-rprx-vision")
                         newClient.put("email", newKey)
-                        newClient.put("limitIp", 1)
+                        newClient.put("limitIp", 0)
                         newClient.put("totalGB", 0)
                         newClient.put("expiryTime", expireTime)
                         newClient.put("enable", true)
                         clients.put(newClient)
                         settings.put("clients", clients)
 
-                        val body = JSONObject().put("id", INBOUND_ID).put("settings", settings.toString()).toString()
-                        apiRequest("inbounds/update/${INBOUND_ID}", "POST", body)
+                        val bodyObj = JSONObject(inbound.toString())
+                        bodyObj.put("settings", settings.toString())
+                        
+                        val updateRes = apiRequest("inbounds/update/${INBOUND_ID}", "POST", bodyObj.toString())
+
+                        if (updateRes.startsWith("error:")) return updateRes
+                        if (!updateRes.contains("\"success\":true")) return "error: " + updateRes.take(100)
+
                         return newKey
                     }
                     "list" -> {
                         val res = apiRequest("inbounds/get/${INBOUND_ID}", "GET")
+                        if (res.startsWith("error:")) return res
                         val clients = JSONObject(JSONObject(res).getJSONObject("obj").getString("settings")).getJSONArray("clients")
                         return clients.toString()
                     }

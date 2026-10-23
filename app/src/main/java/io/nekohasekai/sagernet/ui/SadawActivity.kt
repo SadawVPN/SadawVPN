@@ -93,21 +93,32 @@ class SadawActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun getConfig(): String {
+        fun getConfig(subKey: String): String {
             return try {
-                val res = apiRequest("inbounds/get/${INBOUND_ID}", "GET")
-                if (!res.contains("\"success\":true")) return ""
-                val inbound = JSONObject(res).getJSONObject("obj")
+                // 1. Получаем UUID и flow конкретного клиента
+                val clientRes = apiRequest("clients/get/${subKey}", "GET")
+                if (!clientRes.contains("\"success\":true")) return ""
+                val clientJson = JSONObject(clientRes).getJSONObject("obj").getJSONObject("client")
+                val uuid = clientJson.getString("uuid")
+                val flow = clientJson.optString("flow", "")
+
+                // 2. Получаем настройки инбаунда (порт, pbk, sni, sid)
+                val inboundRes = apiRequest("inbounds/get/${INBOUND_ID}", "GET")
+                if (!inboundRes.contains("\"success\":true")) return ""
+                val inbound = JSONObject(inboundRes).getJSONObject("obj")
                 val streamSettings = JSONObject(inbound.getString("streamSettings"))
                 val reality = streamSettings.getJSONObject("realitySettings")
                 val port = inbound.getInt("port")
                 val pbk = reality.getString("publicKey")
                 val sni = reality.getJSONArray("serverNames").getString(0)
                 val sid = reality.getJSONArray("shortIds").getString(0)
-                val settings = JSONObject(inbound.getString("settings"))
-                val clientUuid = settings.getJSONArray("clients").getJSONObject(0).getString("id")
 
-                "vless://${clientUuid}@83.171.241.170:${port}?type=tcp&security=reality&pbk=${pbk}&fp=firefox&sni=${sni}&sid=${sid}&spx=%2F&flow=xtls-rprx-vision#SadawVPN"
+                // 3. Собираем ссылку
+                var link = "vless://${uuid}@83.171.241.170:${port}?type=tcp&security=reality&pbk=${pbk}&fp=firefox&sni=${sni}&sid=${sid}&spx=%2F#SadawVPN"
+                if (flow.isNotEmpty()) {
+                    link += "&flow=${flow}"
+                }
+                link
             } catch (e: Exception) { "" }
         }
 

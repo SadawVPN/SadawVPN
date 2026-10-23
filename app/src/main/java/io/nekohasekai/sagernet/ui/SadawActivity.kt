@@ -147,7 +147,7 @@ class SadawActivity : AppCompatActivity() {
                     return clients.toString()
                 }
                 return "ok"
-            } catch (e: Exception) { "error: ${e.message}" }
+            } catch (e: Exception) { return "error: ${e.message}" }
         }
 
         @JavascriptInterface

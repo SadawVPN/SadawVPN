@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "698368245602",
+    "project_id": "sadaw-vpn-1792589070",
+    "storage_bucket": "sadaw-vpn-1792589070.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:698368245602:android:e88106c262bc8a4af7763b",
+        "android_client_info": {
+          "package_name": "ru.sadaw.vpn"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCW3xqz7jBTlb0HpxCfL3GF8V0n4Q0_lic"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -35,12 +35,10 @@ class SadawActivity : AppCompatActivity() {
     private var currentProfileId: Long = -1L
     private var forcedBypassPackages = mutableSetOf<String>()
 
-    // Настройки твоей панели 3x-ui
+    // ⚠️ ТВОИ ДАННЫЕ
     private val PANEL_URL = "https://s-26313.pl3.h1clayd.click/VKdsW4izxEXISHud"
+    private val API_TOKEN = "YtD6QHIPg1kKSZujaMwNfKNZXwNPKIsmpUBXvlo7dlQzHqVZ"
     private val INBOUND_ID = "1"
-    private val PANEL_LOGIN = "dXZV3T0IOjSM"
-    private val PANEL_PASSWORD = "vbXiqeszbceHdR4BeFAk"
-
     private val MASTER_KEY = "SADAW-BETA"
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -61,64 +59,15 @@ class SadawActivity : AppCompatActivity() {
     }
 
     inner class Bridge {
-        private var sessionCookie: String? = null
-        private var csrfToken: String? = null
-
-        private fun login(): Boolean {
-            return try {
-                val url = URL("${PANEL_URL}/login")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.doOutput = true
-                
-                val body = JSONObject().put("username", PANEL_LOGIN).put("password", PANEL_PASSWORD).toString()
-                val os = conn.outputStream
-                os.write(body.toByteArray())
-                os.flush()
-                os.close()
-
-                if (conn.responseCode in 200..299) {
-                    val cookies = conn.headerFields["Set-Cookie"]
-                    if (cookies != null) {
-                        sessionCookie = cookies.firstOrNull { it.contains("3x-ui=") || it.contains("session=") }?.substringBefore(";")
-                    }
-                    getCsrfToken()
-                    return sessionCookie != null
-                }
-                false
-            } catch (e: Exception) {
-                Log.e(TAG, "Login error: ${e.message}")
-                false
-            }
-        }
-
-        private fun getCsrfToken() {
-            try {
-                val url = URL("${PANEL_URL}/csrf-token")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.setRequestProperty("Cookie", sessionCookie ?: "")
-                if (conn.responseCode in 200..299) {
-                    val resp = conn.inputStream.bufferedReader().use { it.readText() }
-                    val json = JSONObject(resp)
-                    csrfToken = json.optString("obj", json.optString("token", ""))
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "CSRF error: ${e.message}")
-            }
-        }
-
+        // ПРЯМОЙ ЗАПРОС С API-ТОКЕНОМ (без логина и куки)
         private fun apiRequest(endpoint: String, method: String, body: String? = null): String {
-            if (sessionCookie == null) {
-                if (!login()) return "error: не удалось войти в панель"
-            }
             return try {
                 val url = URL("${PANEL_URL}/panel/api/${endpoint}")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = method
-                conn.setRequestProperty("Cookie", sessionCookie ?: "")
+                conn.setRequestProperty("Authorization", "Bearer ${API_TOKEN}")
                 conn.setRequestProperty("Content-Type", "application/json")
-                if (csrfToken != null) conn.setRequestProperty("X-CSRF-Token", csrfToken!!)
+                conn.setRequestProperty("Accept", "application/json")
                 conn.connectTimeout = 10000
                 conn.readTimeout = 10000
                 
@@ -132,14 +81,12 @@ class SadawActivity : AppCompatActivity() {
                 
                 if (conn.responseCode in 200..299) {
                     conn.inputStream.bufferedReader().use { it.readText() }
-                } else if (conn.responseCode == 401 || conn.responseCode == 403) {
-                    sessionCookie = null
-                    csrfToken = null
-                    "error: сессия истекла"
                 } else {
-                    "error: HTTP ${conn.responseCode}"
+                    val err = try { conn.errorStream?.bufferedReader()?.use { it.readText() } } catch (e: Exception) { "" }
+                    "error: HTTP ${conn.responseCode} $err"
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "API Error: ${e.message}")
                 "error: ${e.message}"
             }
         }
@@ -157,8 +104,9 @@ class SadawActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getConfig(subKey: String): String {
             if (subKey == MASTER_KEY) {
-                return getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
+                val saved = getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
                     .getString("master_vless", "") ?: ""
+                return saved
             }
             return try {
                 val clientRes = apiRequest("clients/get/${subKey}", "GET")
@@ -249,11 +197,18 @@ class SadawActivity : AppCompatActivity() {
                 try {
                     SagerNet.stopService()
                     Thread.sleep(500)
+                    
+                    // Проверяем, что ссылка реальная
+                    if (!vlessUri.startsWith("vless://") || vlessUri.length < 20) {
+                        webView.post { webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(false)", null) }
+                        return@Thread
+                    }
+
                     val prefs = getSharedPreferences("sadaw_vpn", MODE_PRIVATE)
                     var profileId = prefs.getLong("profile_id", -1L)
                     if (profileId == -1L) {
                         val beans = runBlocking { parseProxies(vlessUri) }
-                        val bean = beans.firstOrNull() ?: throw Exception("Ошибка")
+                        val bean = beans.firstOrNull() ?: throw Exception("Неверная ссылка")
                         val profile = runBlocking { ProfileManager.createProfile(0L, bean) }
                         profileId = profile.id
                         prefs.edit().putLong("profile_id", profileId).apply()
@@ -266,7 +221,8 @@ class SadawActivity : AppCompatActivity() {
                         else { SagerNet.startService(); webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(true)", null) }
                     }
                 } catch (e: Exception) {
-                    runOnUiThread { webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(false)", null) }
+                    Log.e(TAG, "Connect error: ${e.message}")
+                    webView.post { webView.evaluateJavascript("window.onVpnResult && window.onVpnResult(false)", null) }
                 }
             }.start()
             return "pending"

@@ -194,10 +194,11 @@ function activateCode(){
 function checkVpnStatus(){
   var code=localStorage.getItem("sadaw_sub_code")||"";
   var cfg=window.AndroidBridge.getConfig(code);
-  if(cfg&&cfg.startsWith("vless://")){
+  if(cfg&&cfg.startsWith("vless://")&&cfg.length>20){
     var m=cfg.match(/@([^:]+):(\d+)/);
     if(m&&window.AndroidBridge.ping)window.AndroidBridge.ping(m[1],parseInt(m[2]),0);
-  }else{setState("fail","Нет конфига. Админка (S) → VLESS");}
+    setState("off");
+  }else{setState("fail","Ссылка не найдена. Зайдите в S → VLESS и вставьте её.");}
 }
 window.onPingResult=function(i,ms){document.getElementById("locPing").innerHTML=ms>0?ms+" мс":"— мс";};
 function setState(s,reason){state=s;document.getElementById("app").setAttribute("data-s",s);document.getElementById("go").disabled=(s==="connecting");

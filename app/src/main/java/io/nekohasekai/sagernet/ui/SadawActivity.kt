@@ -35,12 +35,12 @@ class SadawActivity : AppCompatActivity() {
     private var currentProfileId: Long = -1L
     private var forcedBypassPackages = mutableSetOf<String>()
 
-    // Панель 3x-ui
+    // Панель 3x-ui (вшито)
     private val PANEL_URL = "https://s-26313.pl3.h1clayd.click/VKdsW4izxEXISHud"
     private val API_TOKEN = "YtD6QHIPg1kKSZujaMwNfKNZXwNPKIsmpUBXvlo7dlQzHqVZ"
     private val INBOUND_ID = "1"
 
-    // Вшитый базовый ключ
+    // Вшитый базовый ключ (всегда работает)
     private val MASTER_KEY = "SADAW-BETA"
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -86,10 +86,7 @@ class SadawActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun checkSubscription(subKey: String): String {
-            // Вшитый ключ всегда работает
             if (subKey == MASTER_KEY) return "ok"
-
-            // Остальные проверяются в 3x-ui
             return try {
                 val res = apiRequest("clients/get/${subKey}", "GET")
                 if (res.contains("\"success\":true")) "ok" else "invalid"
@@ -98,18 +95,16 @@ class SadawActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getConfig(subKey: String): String {
-            // Для вшитого ключа — берём ссылку из памяти телефона
             if (subKey == MASTER_KEY) {
                 val prefs = getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
                 return prefs.getString("master_vless", "") ?: ""
             }
-
-            // Для SADAW-BETA1 и других — собираем из 3x-ui
             return try {
                 val clientRes = apiRequest("clients/get/${subKey}", "GET")
                 if (!clientRes.contains("\"success\":true")) return ""
                 val client = JSONObject(clientRes).getJSONObject("obj").getJSONObject("client")
                 val uuid = client.getString("uuid")
+                val flow = client.optString("flow", "")
 
                 val inboundRes = apiRequest("inbounds/get/${INBOUND_ID}", "GET")
                 if (!inboundRes.contains("\"success\":true")) return ""
@@ -121,7 +116,9 @@ class SadawActivity : AppCompatActivity() {
                 val sni = reality.getJSONArray("serverNames").getString(0)
                 val sid = reality.getJSONArray("shortIds").getString(0)
 
-                "vless://${uuid}@83.171.241.170:${port}?type=tcp&security=reality&pbk=${pbk}&fp=firefox&sni=${sni}&sid=${sid}&spx=%2F&flow=xtls-rprx-vision#SadawVPN"
+                var link = "vless://${uuid}@83.171.241.170:${port}?type=tcp&security=reality&pbk=${pbk}&fp=firefox&sni=${sni}&sid=${sid}&spx=%2F#SadawVPN"
+                if (flow.isNotEmpty()) link += "&flow=${flow}"
+                link
             } catch (e: Exception) { "" }
         }
 
@@ -134,13 +131,13 @@ class SadawActivity : AppCompatActivity() {
                 when (action) {
                     "setMasterVless" -> {
                         val link = data.getString("vless")
-                        val prefs = getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
-                        prefs.edit().putString("master_vless", link).apply()
+                        getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
+                            .edit().putString("master_vless", link).apply()
                         return "ok"
                     }
                     "getMasterVless" -> {
-                        val prefs = getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
-                        return prefs.getString("master_vless", "") ?: ""
+                        return getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
+                            .getString("master_vless", "") ?: ""
                     }
                     "create" -> {
                         val days = data.optInt("days", 30)

@@ -34,7 +34,7 @@ class SadawActivity : AppCompatActivity() {
     private var currentProfileId: Long = -1L
     private var forcedBypassPackages = mutableSetOf<String>()
 
-    private val GIST_ID = "b7844ddb8a384bfb9139dbc2b1e64096"
+    private val GIST_ID = "e34a250517c25e1af414d1b24b147ca7"
     private val GH_TOKEN = "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"
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -55,10 +55,9 @@ class SadawActivity : AppCompatActivity() {
     }
 
     inner class Bridge {
-        // --- РАБОТА С GIST (БАЗА ДАННЫХ) ---
         private fun getGistData(): JSONObject {
             return try {
-                val conn = URL("https://api.github.com/gists/b7844ddb8a384bfb9139dbc2b1e64096").openConnection() as HttpURLConnection
+                val conn = URL("https://api.github.com/gists/e34a250517c25e1af414d1b24b147ca7").openConnection() as HttpURLConnection
                 conn.setRequestProperty("Authorization", "token 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")
                 val response = conn.inputStream.bufferedReader().use { it.readText() }
                 val files = JSONObject(response).getJSONObject("files")
@@ -72,7 +71,7 @@ class SadawActivity : AppCompatActivity() {
 
         private fun saveGistData(data: JSONObject): Boolean {
             return try {
-                val conn = URL("https://api.github.com/gists/b7844ddb8a384bfb9139dbc2b1e64096").openConnection() as HttpURLConnection
+                val conn = URL("https://api.github.com/gists/e34a250517c25e1af414d1b24b147ca7").openConnection() as HttpURLConnection
                 conn.requestMethod = "PATCH"
                 conn.setRequestProperty("Authorization", "token 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")
                 conn.setRequestProperty("Content-Type", "application/json")
@@ -95,7 +94,6 @@ class SadawActivity : AppCompatActivity() {
             val keys = data.optJSONObject("keys") ?: return "invalid"
             val keyData = keys.optJSONObject(subKey) ?: return "invalid"
 
-            // 0 означает безлимит (никогда не истекает)
             val expires = keyData.optLong("expires", 0L)
             if (expires > 0 && System.currentTimeMillis() > expires) return "expired"
 

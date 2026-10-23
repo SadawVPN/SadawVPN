@@ -34,8 +34,8 @@ class SadawActivity : AppCompatActivity() {
     private var currentProfileId: Long = -1L
     private var forcedBypassPackages = mutableSetOf<String>()
 
-    private val GIST_ID = "88e5932068fd732aa60629d2db440b46"
-    private val GH_TOKEN = "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"
+    private val GIST_ID = "8ec0cf984648caaadfc716bd032c8d06"
+    private val GH_TOKEN = "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" // Заменим на токен ниже
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,8 +57,8 @@ class SadawActivity : AppCompatActivity() {
     inner class Bridge {
         private fun getGistData(): JSONObject {
             return try {
-                val conn = URL("https://api.github.com/gists/88e5932068fd732aa60629d2db440b46").openConnection() as HttpURLConnection
-                conn.setRequestProperty("Authorization", "token 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")
+                val conn = URL("https://api.github.com/gists/${GIST_ID}").openConnection() as HttpURLConnection
+                conn.setRequestProperty("Authorization", "token ${GH_TOKEN}")
                 val response = conn.inputStream.bufferedReader().use { it.readText() }
                 val files = JSONObject(response).getJSONObject("files")
                 val content = files.getJSONObject("sadaw_db.json").getString("content")
@@ -71,9 +71,9 @@ class SadawActivity : AppCompatActivity() {
 
         private fun saveGistData(data: JSONObject): Boolean {
             return try {
-                val conn = URL("https://api.github.com/gists/88e5932068fd732aa60629d2db440b46").openConnection() as HttpURLConnection
+                val conn = URL("https://api.github.com/gists/${GIST_ID}").openConnection() as HttpURLConnection
                 conn.requestMethod = "PATCH"
-                conn.setRequestProperty("Authorization", "token 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")
+                conn.setRequestProperty("Authorization", "token ${GH_TOKEN}")
                 conn.setRequestProperty("Content-Type", "application/json")
                 conn.doOutput = true
                 val body = JSONObject().put("files", JSONObject().put("sadaw_db.json", JSONObject().put("content", data.toString())))

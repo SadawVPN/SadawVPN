@@ -26,6 +26,7 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.UUID
 
 class SadawActivity : AppCompatActivity() {
     private lateinit var webView: WebView
@@ -34,8 +35,13 @@ class SadawActivity : AppCompatActivity() {
     private var currentProfileId: Long = -1L
     private var forcedBypassPackages = mutableSetOf<String>()
 
-    private val GIST_ID = "8ec0cf984648caaadfc716bd032c8d06"
-    private val GH_TOKEN = "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" // Заменим на токен ниже
+    // Панель 3x-ui
+    private val PANEL_URL = "https://s-26313.pl3.h1clayd.click/VKdsW4izxEXISHud"
+    private val API_TOKEN = "YtD6QHIPg1kKSZujaMwNfKNZXwNPKIsmpUBXvlo7dlQzHqVZ"
+    private val INBOUND_ID = "1"
+
+    // Вшитый базовый ключ
+    private val MASTER_KEY = "SADAW-BETA"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,53 +61,68 @@ class SadawActivity : AppCompatActivity() {
     }
 
     inner class Bridge {
-        private fun getGistData(): JSONObject {
+        private fun apiRequest(endpoint: String, method: String, body: String? = null): String {
             return try {
-                val conn = URL("https://api.github.com/gists/${GIST_ID}").openConnection() as HttpURLConnection
-                conn.setRequestProperty("Authorization", "token ${GH_TOKEN}")
-                val response = conn.inputStream.bufferedReader().use { it.readText() }
-                val files = JSONObject(response).getJSONObject("files")
-                val content = files.getJSONObject("sadaw_db.json").getString("content")
-                JSONObject(content)
-            } catch (e: Exception) {
-                Log.e(TAG, "Gist read error: ${e.message}")
-                JSONObject().put("keys", JSONObject())
-            }
-        }
-
-        private fun saveGistData(data: JSONObject): Boolean {
-            return try {
-                val conn = URL("https://api.github.com/gists/${GIST_ID}").openConnection() as HttpURLConnection
-                conn.requestMethod = "PATCH"
-                conn.setRequestProperty("Authorization", "token ${GH_TOKEN}")
+                val url = URL("${PANEL_URL}/panel/api/${endpoint}")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = method
+                conn.setRequestProperty("Authorization", "Bearer ${API_TOKEN}")
                 conn.setRequestProperty("Content-Type", "application/json")
-                conn.doOutput = true
-                val body = JSONObject().put("files", JSONObject().put("sadaw_db.json", JSONObject().put("content", data.toString())))
-                val os = conn.outputStream
-                os.write(body.toString().toByteArray())
-                os.flush()
-                os.close()
-                conn.responseCode in 200..299
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
+                if (body != null) {
+                    conn.doOutput = true
+                    val os = conn.outputStream
+                    os.write(body.toByteArray())
+                    os.flush()
+                    os.close()
+                }
+                if (conn.responseCode in 200..299) conn.inputStream.bufferedReader().use { it.readText() } else ""
             } catch (e: Exception) {
-                Log.e(TAG, "Gist save error: ${e.message}")
-                false
+                Log.e(TAG, "API Error: ${e.message}")
+                ""
             }
         }
 
         @JavascriptInterface
         fun checkSubscription(subKey: String): String {
-            val data = getGistData()
-            val keys = data.optJSONObject("keys") ?: return "invalid"
-            val keyData = keys.optJSONObject(subKey) ?: return "invalid"
-            val expires = keyData.optLong("expires", 0L)
-            if (expires > 0 && System.currentTimeMillis() > expires) return "expired"
-            return "ok"
+            // Вшитый ключ всегда работает
+            if (subKey == MASTER_KEY) return "ok"
+
+            // Остальные проверяются в 3x-ui
+            return try {
+                val res = apiRequest("clients/get/${subKey}", "GET")
+                if (res.contains("\"success\":true")) "ok" else "invalid"
+            } catch (e: Exception) { "invalid" }
         }
 
         @JavascriptInterface
         fun getConfig(subKey: String): String {
-            val data = getGistData()
-            return data.optString("vless", "")
+            // Для вшитого ключа — берём ссылку из памяти телефона
+            if (subKey == MASTER_KEY) {
+                val prefs = getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
+                return prefs.getString("master_vless", "") ?: ""
+            }
+
+            // Для SADAW-BETA1 и других — собираем из 3x-ui
+            return try {
+                val clientRes = apiRequest("clients/get/${subKey}", "GET")
+                if (!clientRes.contains("\"success\":true")) return ""
+                val client = JSONObject(clientRes).getJSONObject("obj").getJSONObject("client")
+                val uuid = client.getString("uuid")
+
+                val inboundRes = apiRequest("inbounds/get/${INBOUND_ID}", "GET")
+                if (!inboundRes.contains("\"success\":true")) return ""
+                val inbound = JSONObject(inboundRes).getJSONObject("obj")
+                val streamSettings = JSONObject(inbound.getString("streamSettings"))
+                val reality = streamSettings.getJSONObject("realitySettings")
+                val port = inbound.getInt("port")
+                val pbk = reality.getString("publicKey")
+                val sni = reality.getJSONArray("serverNames").getString(0)
+                val sid = reality.getJSONArray("shortIds").getString(0)
+
+                "vless://${uuid}@83.171.241.170:${port}?type=tcp&security=reality&pbk=${pbk}&fp=firefox&sni=${sni}&sid=${sid}&spx=%2F&flow=xtls-rprx-vision#SadawVPN"
+            } catch (e: Exception) { "" }
         }
 
         @JavascriptInterface
@@ -109,30 +130,47 @@ class SadawActivity : AppCompatActivity() {
             try {
                 val data = JSONObject(dataJson)
                 if (data.getString("password") != "ors192289") return "auth"
-                val gistData = getGistData()
-                var keys = gistData.optJSONObject("keys") ?: JSONObject()
+
                 when (action) {
+                    "setMasterVless" -> {
+                        val link = data.getString("vless")
+                        val prefs = getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
+                        prefs.edit().putString("master_vless", link).apply()
+                        return "ok"
+                    }
+                    "getMasterVless" -> {
+                        val prefs = getSharedPreferences("sadaw_prefs", MODE_PRIVATE)
+                        return prefs.getString("master_vless", "") ?: ""
+                    }
                     "create" -> {
                         val days = data.optInt("days", 30)
-                        val newKey = "sadaw_" + System.currentTimeMillis().toString().takeLast(5)
-                        val keyData = JSONObject().put("expires", System.currentTimeMillis() + days * 86400 * 1000L)
-                        keys.put(newKey, keyData)
-                        gistData.put("keys", keys)
-                        saveGistData(gistData)
+                        val newKey = "sadaw_" + UUID.randomUUID().toString().substring(0, 6)
+                        val expireTime = System.currentTimeMillis() + days * 86400 * 1000L
+
+                        val res = apiRequest("inbounds/get/${INBOUND_ID}", "GET")
+                        val inbound = JSONObject(res).getJSONObject("obj")
+                        val settings = JSONObject(inbound.getString("settings"))
+                        val clients = settings.getJSONArray("clients")
+
+                        val newClient = JSONObject()
+                        newClient.put("id", UUID.randomUUID().toString())
+                        newClient.put("flow", "xtls-rprx-vision")
+                        newClient.put("email", newKey)
+                        newClient.put("limitIp", 1)
+                        newClient.put("totalGB", 0)
+                        newClient.put("expiryTime", expireTime)
+                        newClient.put("enable", true)
+                        clients.put(newClient)
+                        settings.put("clients", clients)
+
+                        val body = JSONObject().put("id", INBOUND_ID).put("settings", settings.toString()).toString()
+                        apiRequest("inbounds/update/${INBOUND_ID}", "POST", body)
                         return newKey
                     }
                     "list" -> {
-                        val arr = JSONArray()
-                        keys.keys().forEach { key ->
-                            val kd = keys.getJSONObject(key)
-                            arr.put(JSONObject().put("email", key).put("expiryTime", kd.optLong("expires", 0L)).put("enable", true))
-                        }
-                        return arr.toString()
-                    }
-                    "updateVless" -> {
-                        gistData.put("vless", data.getString("vless"))
-                        saveGistData(gistData)
-                        return "ok"
+                        val res = apiRequest("inbounds/get/${INBOUND_ID}", "GET")
+                        val clients = JSONObject(JSONObject(res).getJSONObject("obj").getString("settings")).getJSONArray("clients")
+                        return clients.toString()
                     }
                 }
                 return "ok"
